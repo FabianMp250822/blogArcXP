@@ -1,10 +1,11 @@
+
 'use client';
 
 import { useAuth } from '@/hooks/use-auth';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { FilePlus, LayoutList } from 'lucide-react';
+import { FilePlus, LayoutList, Users } from 'lucide-react';
 
 export default function AdminPage() {
   const { userProfile } = useAuth();
@@ -16,7 +17,7 @@ export default function AdminPage() {
         <p className="text-muted-foreground">Welcome, {userProfile?.displayName || userProfile?.email || 'Admin'}!</p>
       </header>
 
-      <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <Card className="hover:shadow-lg transition-shadow">
           <CardHeader>
             <CardTitle className="flex items-center font-headline">
@@ -27,7 +28,7 @@ export default function AdminPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Link href="/admin/create" passHref>
+            <Link href="/admin/create" passHref legacyBehavior>
               <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
                 Create Article
               </Button>
@@ -50,9 +51,25 @@ export default function AdminPage() {
             </Button>
           </CardContent>
         </Card>
-      </section>
 
-      {/* Add more admin sections/cards as needed */}
+        <Card className="hover:shadow-lg transition-shadow">
+          <CardHeader>
+            <CardTitle className="flex items-center font-headline">
+             <Users className="mr-2 h-5 w-5 text-primary" /> Manage User Roles
+            </CardTitle>
+            <CardDescription>
+              Assign roles to users, such as 'journalist'.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/admin/manage-roles" passHref legacyBehavior>
+              <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+                Manage Roles
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </section>
     </div>
   );
 }

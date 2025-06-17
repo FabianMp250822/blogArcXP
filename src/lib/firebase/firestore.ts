@@ -14,7 +14,7 @@ import {
   serverTimestamp,
   DocumentData,
   QueryDocumentSnapshot,
-  setDoc, // Added setDoc
+  setDoc, 
 } from 'firebase/firestore';
 import { db } from './config';
 import type { Article, Author, Category, UserProfile } from '@/types';
@@ -148,9 +148,14 @@ export async function getArticlesByCategorySlug(categorySlug: string): Promise<A
 }
 
 export async function getAuthorById(authorId: string): Promise<Author | null> {
-  const docRef = doc(db, 'authors', authorId);
+  const docRef = doc(db, 'authors', authorId); // Assuming 'authors' collection for author details
   const docSnap = await getDoc(docRef);
   if (!docSnap.exists()) {
+     // Fallback to users collection if author not in 'authors'
+     const userProfile = await getUserProfile(authorId);
+     if (userProfile) {
+       return { id: userProfile.uid, name: userProfile.displayName || userProfile.email || 'Unnamed Author', avatarUrl: undefined /* Or a placeholder */};
+     }
     return null;
   }
   const data = docSnap.data();
@@ -174,11 +179,6 @@ export async function createArticleFromDashboard(
   slug: string
 ): Promise<string> {
   const articlesRef = collection(db, 'articles');
-  // Ensure authorName and categoryName are fetched if IDs are present, or set defaults.
-  // For a new article, these might not be fully resolved yet if relying on client-side selection.
-  // The current model stores IDs, and names are denormalized or fetched.
-  // For simplicity, this example assumes `authorName` and `categoryName` might be passed in or resolved later.
-
   const author = articleData.authorId ? await getAuthorById(articleData.authorId) : null;
   const category = articleData.categoryId ? await getCategoryById(articleData.categoryId) : null;
 
@@ -202,6 +202,8 @@ export async function getAllCategories(): Promise<Category[]> {
 }
 
 export async function getAllAuthors(): Promise<Author[]> {
+  // This function might be less relevant if authors are primarily from UserProfiles.
+  // If 'authors' collection is distinct, keep it. Otherwise, consider querying 'users' with 'journalist' role.
   const authorsRef = collection(db, 'authors');
   const q = query(authorsRef, orderBy('name'));
   const snapshot = await getDocs(q);
@@ -213,10 +215,22 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   const userRef = doc(db, 'users', uid);
   const docSnap = await getDoc(userRef);
   if (docSnap.exists()) {
-    return docSnap.data() as UserProfile;
+    return { uid: docSnap.id, ...docSnap.data() } as UserProfile;
   }
   return null;
 }
+
+export async function getUserProfileByEmail(email: string): Promise<UserProfile | null> {
+  const usersRef = collection(db, 'users');
+  const q = query(usersRef, where('email', '==', email), limit(1));
+  const snapshot = await getDocs(q);
+  if (snapshot.empty) {
+    return null;
+  }
+  const docSnap = snapshot.docs[0];
+  return { uid: docSnap.id, ...docSnap.data() } as UserProfile;
+}
+
 
 export async function createUserProfile(uid: string, email: string | null, displayName: string | null, role: UserProfile['role'] = 'user'): Promise<UserProfile> {
   const userRef = doc(db, 'users', uid);
@@ -224,11 +238,17 @@ export async function createUserProfile(uid: string, email: string | null, displ
     uid,
     email,
     displayName,
-    role, // Use provided role or default to 'user'
+    role,
   };
-  await setDoc(userRef, newUserProfile, { merge: true }); // Use merge to avoid overwriting if doc exists partially
+  await setDoc(userRef, newUserProfile, { merge: true });
   return newUserProfile;
 }
+
+export async function updateUserProfile(uid: string, data: Partial<Omit<UserProfile, 'uid'>>): Promise<void> {
+  const userRef = doc(db, 'users', uid);
+  await updateDoc(userRef, data);
+}
+
 
 // Dashboard specific functions
 export async function getArticlesByAuthor(authorId: string): Promise<Article[]> {
@@ -241,7 +261,8 @@ export async function getArticlesByAuthor(authorId: string): Promise<Article[]> 
   const snapshot = await getDocs(q);
   const articlesPromises = snapshot.docs.map(async (docSnap) => {
     const article = articleFromDoc(docSnap);
-    // Author name is implicitly the current user, category needs fetching
+    const author = await getAuthorById(authorId); // Fetch author details using the common function
+    article.authorName = author?.name || 'Current User'; // Or a more specific display name
     if (article.categoryId) {
       const category = await getCategoryById(article.categoryId);
       article.categoryName = category?.name || 'Uncategorized';
@@ -282,7 +303,19 @@ export async function updateArticleStatus(
   const articleRef = doc(db, 'articles', articleId);
   const updateData: { status: Article['status'], publishedAt?: Timestamp } = { status: newStatus };
   if (newStatus === 'published') {
-    updateData.publishedAt = serverTimestamp();
+    // Check if it's already published to avoid overwriting publishedAt if not changing status to published
+    const currentArticle = await getArticleById(articleId);
+    if (currentArticle && currentArticle.status !== 'published') {
+        updateData.publishedAt = serverTimestamp();
+    } else if (currentArticle && currentArticle.publishedAt) {
+        // Preserve existing publishedAt if status is already published or being changed from published to something else then back
+        updateData.publishedAt = currentArticle.publishedAt; 
+    } else {
+        updateData.publishedAt = serverTimestamp();
+    }
+  } else if (newStatus === 'draft' || newStatus === 'pending_review') {
+    // If moving to draft or pending, explicitly nullify publishedAt unless you want to keep it
+    // updateData.publishedAt = null; // Or handle as per app logic - for now, let's not nullify it to keep history
   }
   await updateDoc(articleRef, updateData);
 }

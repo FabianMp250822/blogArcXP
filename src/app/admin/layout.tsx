@@ -1,36 +1,28 @@
+
 'use client';
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
-import { auth } from '@/lib/firebase/config';
+// Removed Google Sign-In related imports: signInWithPopup, GoogleAuthProvider
+// import { auth } from '@/lib/firebase/config'; // No longer needed here for sign-in
 import { Button } from '@/components/ui/button';
-import { Loader2, AlertTriangle } from 'lucide-react';
+import { Loader2, AlertTriangle, LogIn } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import Link from 'next/link';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const { user, userProfile, loading, isAdmin } = useAuth();
+  const { user, loading, isAdmin } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     if (!loading && user && !isAdmin) {
-      // User is logged in but not an admin
-      router.replace('/?error=unauthorized'); // Redirect to home with an error or to a specific unauthorized page
+      router.replace('/?error=unauthorized_admin_area'); 
     }
+    // If not loading and not user, they will see the message below.
+    // If not loading, user exists, and isAdmin is true, children will be shown.
   }, [user, isAdmin, loading, router]);
 
-  const handleSignIn = async () => {
-    const provider = new GoogleAuthProvider();
-    try {
-      await signInWithPopup(auth, provider);
-      // Auth state will update via onAuthStateChanged in AuthProvider
-      // and useEffect above will re-evaluate
-    } catch (error) {
-      console.error('Error signing in with Google:', error);
-      // Handle sign-in error (e.g., display a toast message)
-    }
-  };
 
   if (loading) {
     return (
@@ -48,12 +40,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <CardHeader>
             <CardTitle className="text-2xl font-headline text-center text-primary">Admin Access Required</CardTitle>
             <CardDescription className="text-center">
-              Please sign in with an admin account to access this area.
+              This area is restricted to administrators. Please log in with an authorized account.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center space-y-4">
-            <Button onClick={handleSignIn} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
-              Sign In with Google
+            <Button asChild className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
+              <Link href="/login?redirect=/admin">
+                <LogIn className="mr-2 h-4 w-4" /> Go to Login Page
+              </Link>
             </Button>
             <p className="text-xs text-muted-foreground">
               Ensure you are using an account with admin privileges.
