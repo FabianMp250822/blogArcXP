@@ -135,22 +135,24 @@ export const setFabianAdminRole = onRequest(async (request, response) => {
     );
   } catch (caughtError: unknown) {
     logger.error(`Error processing request for ${targetEmail}:`, caughtError);
-    
-    let responseMessage = "An error occurred: Unknown error"; // Default full message
+
+    let responseMessage = "An error occurred: Unknown error";
     let errorCode: string | undefined;
 
-    if (typeof caughtError === 'object' && caughtError !== null) {
-      if ('code'in caughtError && typeof (caughtError as {code: unknown}).code === 'string') {
+    if (typeof caughtError === "object" && caughtError !== null) {
+      // eslint-disable-next-line max-len
+      if ("code"in caughtError && typeof (caughtError as {code: unknown}).code === "string") {
         errorCode = (caughtError as {code: string}).code;
       }
-      if ('message' in caughtError && typeof (caughtError as {message: unknown}).message === 'string') {
+      // eslint-disable-next-line max-len
+      if ("message" in caughtError && typeof (caughtError as {message: unknown}).message === "string") {
         const errMessage = (caughtError as {message: string}).message;
         if (errMessage) {
-            responseMessage = `An error occurred: ${errMessage}`;
+          responseMessage = `An error occurred: ${errMessage}`;
         }
       }
-    } else if (typeof caughtError === 'string' && caughtError) {
-        responseMessage = `An error occurred: ${caughtError}`;
+    } else if (typeof caughtError === "string" && caughtError) {
+      responseMessage = `An error occurred: ${caughtError}`;
     }
 
     if (errorCode === "auth/user-not-found") {
