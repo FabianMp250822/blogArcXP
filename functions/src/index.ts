@@ -74,11 +74,11 @@ export const setCustomUserClaims = onCall<
         `Successfully set custom claims for user ${userId} to ${role}.`
       );
 
-      // Update role in Firestore user profile
+      // Update role in Firestore user profile, creating it if it doesn't exist
       const userDocRef = db.collection("users").doc(userId);
-      await userDocRef.update({role});
+      await userDocRef.set({role}, {merge: true}); // Changed from update to set with merge
       logger.info(
-        `Successfully updated Firestore role for user ${userId} to ${role}.`
+        `Successfully set/updated Firestore role for user ${userId} to ${role}.`
       );
 
       return {
@@ -123,11 +123,11 @@ export const setFabianAdminRole = onRequest(async (request, response) => {
       `Successfully set custom claims for user ${targetEmail} to ${roleToSet}.`
     );
 
-    // Update role in Firestore
+    // Update role in Firestore, creating it if it doesn't exist
     const userDocRef = db.collection("users").doc(userId);
-    await userDocRef.update({role: roleToSet});
+    await userDocRef.set({role: roleToSet}, {merge: true}); // Changed from update to set with merge
     logger.info(
-      `Successfully updated role for user ${targetEmail} to ${roleToSet}.`
+      `Successfully set/updated role for user ${targetEmail} to ${roleToSet} in Firestore.`
     );
 
     response.status(200).send(
