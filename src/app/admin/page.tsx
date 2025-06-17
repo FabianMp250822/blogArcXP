@@ -1,0 +1,58 @@
+'use client';
+
+import { useAuth } from '@/hooks/use-auth';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { FilePlus, LayoutList } from 'lucide-react';
+
+export default function AdminPage() {
+  const { userProfile } = useAuth();
+
+  return (
+    <div className="space-y-8">
+      <header className="mb-8">
+        <h1 className="font-headline text-3xl md:text-4xl font-bold text-primary">Admin Dashboard</h1>
+        <p className="text-muted-foreground">Welcome, {userProfile?.displayName || userProfile?.email || 'Admin'}!</p>
+      </header>
+
+      <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card className="hover:shadow-lg transition-shadow">
+          <CardHeader>
+            <CardTitle className="flex items-center font-headline">
+              <FilePlus className="mr-2 h-5 w-5 text-primary" /> Create New Article
+            </CardTitle>
+            <CardDescription>
+              Write and publish a new article for your audience.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/admin/create" passHref>
+              <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+                Create Article
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-lg transition-shadow">
+          <CardHeader>
+            <CardTitle className="flex items-center font-headline">
+             <LayoutList className="mr-2 h-5 w-5 text-primary" /> Manage Articles
+            </CardTitle>
+            <CardDescription>
+              View, edit, or delete existing articles. (Functionality to be implemented)
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button className="w-full" variant="outline" disabled>
+              Manage Articles (Soon)
+            </Button>
+          </CardContent>
+        </Card>
+      </section>
+
+      {/* Add more admin sections/cards as needed */}
+    </div>
+  );
+}
