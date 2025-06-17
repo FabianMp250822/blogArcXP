@@ -1,13 +1,50 @@
+import Link from 'next/link';
+import React from 'react';
+
+const siteConfig = {
+  companyName: "Surcos S.A.",
+  currentYear: new Date().getFullYear(),
+};
+
+const footerLinks = [
+  { label: "Aviso legal", href: "#" },
+  { label: "Política de Protección de Datos", href: "#" },
+  { label: "Política de cookies", href: "#" },
+  { label: "Transparencia", href: "#" },
+  { label: "Soluciones Corporativas", href: "#" },
+  { label: "Teléfonos", href: "#" },
+  { label: "Escribanos", href: "#" },
+];
+
 export default function Footer() {
   return (
-    <footer className="bg-card border-t border-border py-8 text-center text-muted-foreground">
-      <div className="container mx-auto px-4">
-        <p className="text-sm">
-          &copy; {new Date().getFullYear()} Firebase News. All rights reserved.
-        </p>
-        <p className="text-xs mt-2">
-          Built with Next.js and Firebase. Inspired by Arc XP.
-        </p>
+    <footer className="text-xs border-t border-border">
+      <div className="bg-primary/10 dark:bg-primary/20 text-foreground py-6">
+        <div className="container mx-auto px-4 text-center">
+          <nav className="flex flex-wrap justify-center items-center space-x-1 md:space-x-2 mb-4">
+            {footerLinks.map((link, index) => (
+              <React.Fragment key={link.label}>
+                <Link href={link.href} className="px-1 md:px-2 hover:underline">
+                  {link.label}
+                </Link>
+                {index < footerLinks.length - 1 && (
+                  <span className="text-muted-foreground">|</span>
+                )}
+              </React.Fragment>
+            ))}
+          </nav>
+
+          <p className="mb-2">
+            © {siteConfig.currentYear} {siteConfig.companyName}. Todos los derechos reservados.
+          </p>
+
+          <p className="max-w-3xl mx-auto">
+            {siteConfig.companyName} realiza una reserva expresa de las reproducciones y usos de las obras y otras prestaciones accesibles desde este sitio web a medios de lectura mecánica u otros medios que resulten adecuados.
+          </p>
+        </div>
+      </div>
+
+      <div className="bg-navbar-background h-2">
       </div>
     </footer>
   );
