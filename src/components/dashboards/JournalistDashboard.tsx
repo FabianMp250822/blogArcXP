@@ -20,7 +20,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
 export default function JournalistDashboard() {
@@ -30,6 +29,9 @@ export default function JournalistDashboard() {
   const [loading, setLoading] = useState(true);
   const [isPending, startTransition] = useTransition();
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
+
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [articleToDelete, setArticleToDelete] = useState<Article | null>(null);
 
   useEffect(() => {
     if (user?.uid) {
@@ -44,13 +46,28 @@ export default function JournalistDashboard() {
     }
   }, [user?.uid, toast]);
 
+  const refreshArticles = async () => {
+    if (!user?.uid) return;
+    setLoading(true);
+    try {
+        const fetchedArticles = await getArticlesByAuthor(user.uid);
+        setArticles(fetchedArticles);
+    } catch (err) {
+        console.error("Failed to refresh articles:", err);
+        toast({ title: "Error", description: "Could not refresh your articles.", variant: "destructive" });
+    } finally {
+        setLoading(false);
+    }
+  };
+
+
   const handleSendForReview = (articleId: string) => {
     setActionLoading(prev => ({ ...prev, [`sendForReview-${articleId}`]: true }));
     startTransition(async () => {
       const result = await sendArticleForReviewAction(articleId);
       if (result.success) {
         toast({ title: 'Success', description: result.message });
-        setArticles(prev => prev.map(a => a.id === articleId ? { ...a, status: 'pending_review' } : a));
+        refreshArticles(); // Refresh to get updated status
       } else {
         toast({ title: 'Error', description: result.message, variant: 'destructive' });
       }
@@ -58,34 +75,47 @@ export default function JournalistDashboard() {
     });
   };
   
-  const handleDeleteArticle = (articleId: string) => {
+  const handleDeleteRequest = (article: Article) => {
+    setArticleToDelete(article);
+    setShowDeleteDialog(true);
+  };
+
+  const confirmDeleteArticle = () => {
+    if (!articleToDelete) return;
+    const articleId = articleToDelete.id;
     setActionLoading(prev => ({ ...prev, [`delete-${articleId}`]: true }));
+    setShowDeleteDialog(false);
+
     startTransition(async () => {
-      // Confirmation dialog is good practice here, but for brevity:
-      const result = await deleteArticleAction(articleId); // Assuming this action exists
+      const result = await deleteArticleAction(articleId); 
       if (result.success) {
         toast({ title: 'Success', description: result.message });
-        setArticles(prev => prev.filter(a => a.id !== articleId));
+        refreshArticles(); // Refresh to remove deleted article
       } else {
         toast({ title: 'Error', description: result.message, variant: 'destructive' });
       }
       setActionLoading(prev => ({ ...prev, [`delete-${articleId}`]: false }));
+      setArticleToDelete(null);
     });
   };
 
 
   const getActions = (article: Article) => {
-    const actions: any[] = []; // Type assertion for ArticleAction[]
+    const actions: any[] = []; 
     if (article.status === 'published') {
-      actions.push({ type: 'view', onClick: () => {} });
+      actions.push({ type: 'view', slug: article.slug });
     }
-    if (article.status === 'draft') {
-      actions.push({ type: 'edit', onClick: () => {} }); // Link handled by ArticleTable
-      actions.push({ type: 'sendForReview', onClick: handleSendForReview, disabled: isPending || actionLoading[`sendForReview-${article.id}`] });
+    // Journalist can only edit their own draft or pending_review articles
+    if (article.status === 'draft' || article.status === 'pending_review') {
+      actions.push({ type: 'edit', articleId: article.id }); 
+      if (article.status === 'draft') {
+        actions.push({ type: 'sendForReview', onClick: () => handleSendForReview(article.id), disabled: isPending || actionLoading[`sendForReview-${article.id}`] });
+      }
     }
-     actions.push({
+    // Journalist can delete their own articles, regardless of status (unless published and locked - current logic allows)
+    actions.push({
         type: 'delete',
-        onClick: () => handleDeleteArticle(article.id), // Placeholder, use AlertDialog
+        onClick: () => handleDeleteRequest(article), 
         disabled: isPending || actionLoading[`delete-${article.id}`]
     });
     return actions;
@@ -114,6 +144,28 @@ export default function JournalistDashboard() {
         getActionsForArticle={getActions}
         isLoading={actionLoading}
       />
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the article
+              "{articleToDelete?.title}" and its associated files.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setArticleToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteArticle}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+              disabled={isPending || (articleToDelete && actionLoading[`delete-${articleToDelete.id}`])}
+            >
+              {isPending || (articleToDelete && actionLoading[`delete-${articleToDelete.id}`]) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

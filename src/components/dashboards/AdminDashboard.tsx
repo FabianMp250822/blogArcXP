@@ -8,7 +8,7 @@ import type { Article } from '@/types';
 import ArticleTable from './ArticleTable';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { FilePlus, Loader2, Filter } from 'lucide-react';
+import { FilePlus, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { approveArticleAction, rejectArticleAction, deleteArticleAction } from '@/app/dashboard/actions';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -21,8 +21,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+} from "@/components/ui/alert-dialog"; // Removed AlertDialogTrigger as it's part of ArticleTable's button now
 
 type StatusFilter = Article['status'] | 'all';
 
@@ -35,6 +34,9 @@ export default function AdminDashboard() {
   const [isPending, startTransition] = useTransition();
   const [currentTab, setCurrentTab] = useState<StatusFilter>('pending_review');
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
+
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [articleToDelete, setArticleToDelete] = useState<Article | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -98,8 +100,17 @@ export default function AdminDashboard() {
     });
   };
   
-  const handleDeleteArticle = (articleId: string) => {
+  const handleDeleteRequest = (article: Article) => {
+    setArticleToDelete(article);
+    setShowDeleteDialog(true);
+  };
+
+  const confirmDeleteArticle = () => {
+    if (!articleToDelete) return;
+    const articleId = articleToDelete.id;
     setActionLoading(prev => ({ ...prev, [`delete-${articleId}`]: true }));
+    setShowDeleteDialog(false);
+
     startTransition(async () => {
       const result = await deleteArticleAction(articleId);
       if (result.success) {
@@ -109,6 +120,7 @@ export default function AdminDashboard() {
         toast({ title: 'Error', description: result.message, variant: 'destructive' });
       }
       setActionLoading(prev => ({ ...prev, [`delete-${articleId}`]: false }));
+      setArticleToDelete(null);
     });
   };
 
@@ -116,26 +128,26 @@ export default function AdminDashboard() {
   const getActions = (article: Article) => {
     const actions: any[] = [];
      if (article.status === 'published') {
-      actions.push({ type: 'view', onClick: () => {} }); // Link handled by ArticleTable
+      actions.push({ type: 'view', slug: article.slug }); 
     }
     if (article.status === 'pending_review') {
-      actions.push({ type: 'approve', onClick: handleApprove, disabled: isPending || actionLoading[`approve-${article.id}`] });
-      actions.push({ type: 'reject', onClick: handleReject, disabled: isPending || actionLoading[`reject-${article.id}`] });
+      actions.push({ type: 'approve', onClick: () => handleApprove(article.id), disabled: isPending || actionLoading[`approve-${article.id}`] });
+      actions.push({ type: 'reject', onClick: () => handleReject(article.id), disabled: isPending || actionLoading[`reject-${article.id}`] });
     }
-    // Admin can edit any draft
-    if (article.status === 'draft') {
-       actions.push({ type: 'edit', onClick: () => {} });
+    // Admin can edit any draft or published article (edit might not change status, just content)
+    if (article.status === 'draft' || article.status === 'published' || article.status === 'pending_review') {
+       actions.push({ type: 'edit', articleId: article.id });
     }
-    // Admin can delete any article (with confirmation)
+    
     actions.push({
         type: 'delete',
-        onClick: () => handleDeleteArticle(article.id), // Placeholder, use AlertDialog
+        onClick: () => handleDeleteRequest(article), 
         disabled: isPending || actionLoading[`delete-${article.id}`]
     });
     return actions;
   };
 
-  if (loading && !allArticles.length) { // Show loader only on initial full load
+  if (loading && !allArticles.length) { 
     return <div className="flex justify-center items-center min-h-[200px]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
   
@@ -172,6 +184,29 @@ export default function AdminDashboard() {
             )}
         </TabsContent>
       </Tabs>
+
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the article
+              "{articleToDelete?.title}" and its associated files.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setArticleToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteArticle}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+              disabled={isPending || (articleToDelete && actionLoading[`delete-${articleToDelete.id}`])}
+            >
+              {isPending || (articleToDelete && actionLoading[`delete-${articleToDelete.id}`]) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
