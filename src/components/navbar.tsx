@@ -43,7 +43,7 @@ export default function Navbar() {
         <div className="container mx-auto px-4 py-1 flex items-center justify-between text-xs">
           <nav className="flex items-center space-x-3">
             {navLinks.map(link => (
-              <Link key={link.label} href={link.href} passHref legacyBehavior>
+              <Link key={link.label} href={link.href}>
                 <Button variant="link" className="text-inherit hover:text-inherit/80 p-0 h-auto text-xs font-medium tracking-wider">
                   {link.label}
                 </Button>
