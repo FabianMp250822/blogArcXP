@@ -146,7 +146,7 @@ export default function AdminDashboard() {
             <h1 className="text-3xl font-headline text-primary">Admin Article Management</h1>
             <p className="text-muted-foreground">Oversee all articles, {userProfile?.displayName || user?.email}.</p>
         </div>
-        <Link href="/dashboard/create" passHref legacyBehavior>
+        <Link href="/dashboard/create">
           <Button className="bg-accent hover:bg-accent/80 text-accent-foreground">
             <FilePlus className="mr-2 h-5 w-5" /> Create New Article
           </Button>

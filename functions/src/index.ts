@@ -76,6 +76,7 @@ export const setCustomUserClaims = onCall<
 
       // Update role in Firestore user profile, creating it if it doesn't exist
       const userDocRef = db.collection("users").doc(userId);
+      // eslint-disable-next-line max-len
       await userDocRef.set({role}, {merge: true}); // Changed from update to set with merge
       logger.info(
         `Successfully set/updated Firestore role for user ${userId} to ${role}.`
@@ -124,9 +125,12 @@ export const setFabianAdminRole = onRequest(async (request, response) => {
     );
 
     // Update role in Firestore, creating it if it doesn't exist
+    // eslint-disable-next-line max-len
     const userDocRef = db.collection("users").doc(userId);
+    // eslint-disable-next-line max-len
     await userDocRef.set({role: roleToSet}, {merge: true}); // Changed from update to set with merge
     logger.info(
+      // eslint-disable-next-line max-len
       `Successfully set/updated role for user ${targetEmail} to ${roleToSet} in Firestore.`
     );
 
