@@ -1,3 +1,4 @@
+
 import type { Timestamp } from 'firebase/firestore';
 
 export interface Article {
@@ -9,7 +10,7 @@ export interface Article {
   coverImageUrl: string;
   authorId: string;
   categoryId: string;
-  status: 'draft' | 'published';
+  status: 'draft' | 'pending_review' | 'published'; // Updated status
   createdAt: Timestamp;
   publishedAt?: Timestamp;
   // Denormalized fields for easier display
@@ -20,7 +21,7 @@ export interface Article {
 export interface Author {
   id: string;
   name: string;
-  avatarUrl: string;
+  avatarUrl?: string; // Made optional as it might not always be present
 }
 
 export interface Category {
@@ -33,5 +34,5 @@ export interface UserProfile {
   uid: string;
   email: string | null;
   displayName: string | null;
-  role: 'user' | 'admin';
+  role: 'user' | 'journalist' | 'admin'; // Added journalist role
 }

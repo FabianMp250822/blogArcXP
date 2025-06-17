@@ -1,10 +1,11 @@
+
 'use client';
 
 import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
-import { LogIn, LogOut, User, Mail, Search, Menu, RadioTower, MessageCircle, ShieldCheck } from 'lucide-react';
+import { LogIn, LogOut, User, Mail, Search, Menu, RadioTower, MessageCircle, ShieldCheck, LayoutDashboard } from 'lucide-react';
 import { WRadioLogo } from '@/components/icons/w-radio-logo'; // New Logo
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -18,7 +19,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 export default function Navbar() {
-  const { user, userProfile, loading, signOutUser, isAdmin } = useAuth();
+  const { user, userProfile, loading, signOutUser, isAdmin, role } = useAuth(); // Added role
   const router = useRouter();
 
   const handleSignOut = async () => {
@@ -42,7 +43,7 @@ export default function Navbar() {
         <div className="container mx-auto px-4 py-1 flex items-center justify-between text-xs">
           <nav className="flex items-center space-x-3">
             {navLinks.map(link => (
-              <Link key={link.label} href={link.href} passHref>
+              <Link key={link.label} href={link.href} passHref legacyBehavior>
                 <Button variant="link" className="text-inherit hover:text-inherit/80 p-0 h-auto text-xs font-medium tracking-wider">
                   {link.label}
                 </Button>
@@ -68,10 +69,16 @@ export default function Navbar() {
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  {isAdmin && (
+                  {(role === 'admin' || role === 'journalist') && (
+                     <DropdownMenuItem onClick={() => router.push('/dashboard')}>
+                      <LayoutDashboard className="mr-2 h-4 w-4" />
+                      Dashboard
+                    </DropdownMenuItem>
+                  )}
+                  {isAdmin && ( // Still useful for specific admin-only links like /admin (if it remains separate)
                     <DropdownMenuItem onClick={() => router.push('/admin')}>
                       <ShieldCheck className="mr-2 h-4 w-4" />
-                      Admin Panel
+                      Old Admin Panel
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuItem onClick={handleSignOut}>
@@ -81,7 +88,7 @@ export default function Navbar() {
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              <Button onClick={() => router.push('/admin')} variant="ghost" size="icon" className="h-auto w-auto p-1 text-primary-foreground hover:bg-primary/80 hover:text-primary-foreground">
+              <Button onClick={() => router.push('/login')} variant="ghost" size="icon" className="h-auto w-auto p-1 text-primary-foreground hover:bg-primary/80 hover:text-primary-foreground" title="Login">
                 <User className="h-4 w-4" />
               </Button>
             )}
@@ -124,7 +131,7 @@ export default function Navbar() {
              {/* Fallback login for mobile if not covered by hamburger, can be removed if hamburger handles all auth states */}
             <div className="md:hidden">
               {loading ? ( <Skeleton className="h-6 w-6 rounded-full bg-navbar-foreground/20" /> )
-               : !user ? ( <Button onClick={() => router.push('/admin')} variant="ghost" size="icon" className="h-7 w-7 text-navbar-foreground hover:text-navbar-foreground/80"><LogIn className="h-4 w-4" /></Button>)
+               : !user ? ( <Button onClick={() => router.push('/login')} variant="ghost" size="icon" className="h-7 w-7 text-navbar-foreground hover:text-navbar-foreground/80"><LogIn className="h-4 w-4" /></Button>)
                : null
               }
             </div>

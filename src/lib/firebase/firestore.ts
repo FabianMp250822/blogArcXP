@@ -1,3 +1,4 @@
+
 import {
   collection,
   query,
@@ -8,19 +9,22 @@ import {
   doc,
   getDoc,
   addDoc,
+  updateDoc,
   Timestamp,
   serverTimestamp,
   DocumentData,
   QueryDocumentSnapshot,
+  setDoc, // Added setDoc
 } from 'firebase/firestore';
 import { db } from './config';
 import type { Article, Author, Category, UserProfile } from '@/types';
 
 // Helper to convert Firestore doc to Article
-const articleFromDoc = (doc: QueryDocumentSnapshot<DocumentData> | DocumentData): Article => {
-  const data = doc.data();
+const articleFromDoc = (docSnap: QueryDocumentSnapshot<DocumentData> | DocumentData): Article => {
+  const data = docSnap.data();
+  if (!data) throw new Error("Document data is undefined");
   return {
-    id: doc.id,
+    id: docSnap.id,
     title: data.title,
     slug: data.slug,
     excerpt: data.excerpt,
@@ -28,10 +32,9 @@ const articleFromDoc = (doc: QueryDocumentSnapshot<DocumentData> | DocumentData)
     coverImageUrl: data.coverImageUrl,
     authorId: data.authorId,
     categoryId: data.categoryId,
-    status: data.status,
+    status: data.status as Article['status'],
     createdAt: data.createdAt as Timestamp,
     publishedAt: data.publishedAt as Timestamp | undefined,
-    // These would ideally be populated by joining/denormalizing
     authorName: data.authorName || 'Unknown Author',
     categoryName: data.categoryName || 'Uncategorized',
   };
@@ -47,10 +50,8 @@ export async function getPublishedArticles(count: number = 10): Promise<Article[
     limit(count)
   );
   const snapshot = await getDocs(q);
-  const articles = snapshot.docs.map(articleFromDoc);
-
-  // Fetch author and category names (simplified, consider denormalization for performance)
-  for (const article of articles) {
+  const articlesPromises = snapshot.docs.map(async (docSnap) => {
+    const article = articleFromDoc(docSnap);
     if (article.authorId) {
       const author = await getAuthorById(article.authorId);
       article.authorName = author?.name || 'Unknown Author';
@@ -59,8 +60,27 @@ export async function getPublishedArticles(count: number = 10): Promise<Article[
       const category = await getCategoryById(article.categoryId);
       article.categoryName = category?.name || 'Uncategorized';
     }
+    return article;
+  });
+  return Promise.all(articlesPromises);
+}
+
+export async function getArticleById(articleId: string): Promise<Article | null> {
+  const docRef = doc(db, 'articles', articleId);
+  const docSnap = await getDoc(docRef);
+  if (!docSnap.exists()) {
+    return null;
   }
-  return articles;
+  const article = articleFromDoc(docSnap);
+  if (article.authorId) {
+    const author = await getAuthorById(article.authorId);
+    article.authorName = author?.name;
+  }
+  if (article.categoryId) {
+    const category = await getCategoryById(article.categoryId);
+    article.categoryName = category?.name;
+  }
+  return article;
 }
 
 export async function getArticleBySlug(slug: string): Promise<Article | null> {
@@ -115,16 +135,16 @@ export async function getArticlesByCategorySlug(categorySlug: string): Promise<A
     orderBy('publishedAt', 'desc')
   );
   const snapshot = await getDocs(q);
-  const articles = snapshot.docs.map(articleFromDoc);
-  
-  for (const article of articles) {
-     if (article.authorId) {
-      const author = await getAuthorById(article.authorId);
-      article.authorName = author?.name || 'Unknown Author';
-    }
-    article.categoryName = category.name;
-  }
-  return articles;
+  const articlesPromises = snapshot.docs.map(async (docSnap) => {
+    const article = articleFromDoc(docSnap);
+    if (article.authorId) {
+     const author = await getAuthorById(article.authorId);
+     article.authorName = author?.name || 'Unknown Author';
+   }
+   article.categoryName = category.name;
+   return article;
+  });
+  return Promise.all(articlesPromises);
 }
 
 export async function getAuthorById(authorId: string): Promise<Author | null> {
@@ -137,10 +157,36 @@ export async function getAuthorById(authorId: string): Promise<Author | null> {
   return { id: docSnap.id, name: data.name, avatarUrl: data.avatarUrl };
 }
 
-export async function createArticle(articleData: Omit<Article, 'id' | 'createdAt' | 'publishedAt' | 'authorName' | 'categoryName'>): Promise<string> {
+// Used by admin create form
+export async function createFirestoreArticle(articleData: Omit<Article, 'id' | 'createdAt' | 'publishedAt' | 'authorName' | 'categoryName'>): Promise<string> {
   const articlesRef = collection(db, 'articles');
   const docRef = await addDoc(articlesRef, {
     ...articleData,
+    createdAt: serverTimestamp(),
+    publishedAt: articleData.status === 'published' ? serverTimestamp() : null,
+  });
+  return docRef.id;
+}
+
+// Used by dashboard create form
+export async function createArticleFromDashboard(
+  articleData: Omit<Article, 'id' | 'createdAt' | 'publishedAt' | 'authorName' | 'categoryName' | 'slug'>,
+  slug: string
+): Promise<string> {
+  const articlesRef = collection(db, 'articles');
+  // Ensure authorName and categoryName are fetched if IDs are present, or set defaults.
+  // For a new article, these might not be fully resolved yet if relying on client-side selection.
+  // The current model stores IDs, and names are denormalized or fetched.
+  // For simplicity, this example assumes `authorName` and `categoryName` might be passed in or resolved later.
+
+  const author = articleData.authorId ? await getAuthorById(articleData.authorId) : null;
+  const category = articleData.categoryId ? await getCategoryById(articleData.categoryId) : null;
+
+  const docRef = await addDoc(articlesRef, {
+    ...articleData,
+    slug,
+    authorName: author?.name || 'Unknown Author',
+    categoryName: category?.name || 'Uncategorized',
     createdAt: serverTimestamp(),
     publishedAt: articleData.status === 'published' ? serverTimestamp() : null,
   });
@@ -152,14 +198,14 @@ export async function getAllCategories(): Promise<Category[]> {
   const categoriesRef = collection(db, 'categories');
   const q = query(categoriesRef, orderBy('name'));
   const snapshot = await getDocs(q);
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Category));
+  return snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Category));
 }
 
 export async function getAllAuthors(): Promise<Author[]> {
   const authorsRef = collection(db, 'authors');
   const q = query(authorsRef, orderBy('name'));
   const snapshot = await getDocs(q);
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Author));
+  return snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Author));
 }
 
 
@@ -169,26 +215,74 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   if (docSnap.exists()) {
     return docSnap.data() as UserProfile;
   }
-  // Optionally create a default user profile if it doesn't exist
-  // For now, return null
   return null;
 }
 
-// Example function to create a user profile document (e.g., on sign up)
-// This would typically be called from a server-side function or when a new user signs up.
-export async function createUserProfile(uid: string, email: string | null, displayName: string | null) {
+export async function createUserProfile(uid: string, email: string | null, displayName: string | null, role: UserProfile['role'] = 'user'): Promise<UserProfile> {
   const userRef = doc(db, 'users', uid);
-  // Default role to 'user'
-  // In a real app, admin role would be set manually or through a secure process
   const newUserProfile: UserProfile = {
     uid,
     email,
     displayName,
-    role: 'user', // New users are 'user' by default
+    role, // Use provided role or default to 'user'
   };
-  await setDoc(userRef, newUserProfile); // Using setDoc to create or overwrite
+  await setDoc(userRef, newUserProfile, { merge: true }); // Use merge to avoid overwriting if doc exists partially
   return newUserProfile;
 }
 
-// Add setDoc to imports
-import { setDoc } from 'firebase/firestore';
+// Dashboard specific functions
+export async function getArticlesByAuthor(authorId: string): Promise<Article[]> {
+  const articlesRef = collection(db, 'articles');
+  const q = query(
+    articlesRef,
+    where('authorId', '==', authorId),
+    orderBy('createdAt', 'desc')
+  );
+  const snapshot = await getDocs(q);
+  const articlesPromises = snapshot.docs.map(async (docSnap) => {
+    const article = articleFromDoc(docSnap);
+    // Author name is implicitly the current user, category needs fetching
+    if (article.categoryId) {
+      const category = await getCategoryById(article.categoryId);
+      article.categoryName = category?.name || 'Uncategorized';
+    }
+    return article;
+  });
+  return Promise.all(articlesPromises);
+}
+
+export async function getAllArticlesForAdmin(filterStatus?: Article['status']): Promise<Article[]> {
+  const articlesRef = collection(db, 'articles');
+  let q;
+  if (filterStatus) {
+    q = query(articlesRef, where('status', '==', filterStatus), orderBy('createdAt', 'desc'));
+  } else {
+    q = query(articlesRef, orderBy('createdAt', 'desc'));
+  }
+  const snapshot = await getDocs(q);
+  const articlesPromises = snapshot.docs.map(async (docSnap) => {
+    const article = articleFromDoc(docSnap);
+    if (article.authorId) {
+      const author = await getAuthorById(article.authorId);
+      article.authorName = author?.name || 'Unknown Author';
+    }
+    if (article.categoryId) {
+      const category = await getCategoryById(article.categoryId);
+      article.categoryName = category?.name || 'Uncategorized';
+    }
+    return article;
+  });
+  return Promise.all(articlesPromises);
+}
+
+export async function updateArticleStatus(
+  articleId: string,
+  newStatus: Article['status'],
+): Promise<void> {
+  const articleRef = doc(db, 'articles', articleId);
+  const updateData: { status: Article['status'], publishedAt?: Timestamp } = { status: newStatus };
+  if (newStatus === 'published') {
+    updateData.publishedAt = serverTimestamp();
+  }
+  await updateDoc(articleRef, updateData);
+}
