@@ -37,7 +37,7 @@ export const setCustomUserClaims = onCall<
 
     // Check if the caller is authenticated and an admin
     if (!request.auth || request.auth.token.role !== "admin") {
-      logger.error("Permission denied. Caller is not an admin.", {auth: request.auth});
+      logger.error("Permission denied.", {auth: request.auth});
       throw new HttpsError(
         "permission-denied",
         "You must be an admin to perform this action."
@@ -127,26 +127,39 @@ export const setFabianAdminRole = onRequest(async (request, response) => {
     const userDocRef = db.collection("users").doc(userId);
     await userDocRef.update({role: roleToSet});
     logger.info(
-      `Successfully updated Firestore role for user ${targetEmail} to ${roleToSet}.`
+      `Successfully updated role for user ${targetEmail} to ${roleToSet}.`
     );
 
     response.status(200).send(
       `Successfully assigned role '${roleToSet}' to ${targetEmail}.`
     );
-  } catch (error: any) {
-    logger.error(`Error processing request for ${targetEmail}:`, error);
-    if (error.code === "auth/user-not-found") {
+  } catch (caughtError: unknown) {
+    logger.error(`Error processing request for ${targetEmail}:`, caughtError);
+    
+    let responseMessage = "An error occurred: Unknown error"; // Default full message
+    let errorCode: string | undefined;
+
+    if (typeof caughtError === 'object' && caughtError !== null) {
+      if ('code'in caughtError && typeof (caughtError as {code: unknown}).code === 'string') {
+        errorCode = (caughtError as {code: string}).code;
+      }
+      if ('message' in caughtError && typeof (caughtError as {message: unknown}).message === 'string') {
+        const errMessage = (caughtError as {message: string}).message;
+        if (errMessage) {
+            responseMessage = `An error occurred: ${errMessage}`;
+        }
+      }
+    } else if (typeof caughtError === 'string' && caughtError) {
+        responseMessage = `An error occurred: ${caughtError}`;
+    }
+
+    if (errorCode === "auth/user-not-found") {
       response.status(404).send(
         `User with email ${targetEmail} not found.`
       );
     } else {
-      response.status(500).send(
-        `An error occurred: ${error.message || "Unknown error"}`
-      );
+      response.status(500).send(responseMessage);
     }
   }
 });
 
-// You can add more functions here
-// For example, an HTTP function to revoke claims (requires careful implementation)
-// or other callable functions for different admin tasks.
