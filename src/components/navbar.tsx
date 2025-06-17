@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
 import { LogIn, LogOut, User, Mail, Search, Menu, RadioTower, MessageCircle, ShieldCheck, LayoutDashboard } from 'lucide-react';
-import { WRadioLogo } from '@/components/icons/w-radio-logo'; // New Logo
+import { WRadioLogo } from '@/components/icons/w-radio-logo';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -17,10 +17,24 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useState, useEffect } from 'react';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale'; // Import Spanish locale
 
 export default function Navbar() {
-  const { user, userProfile, loading, signOutUser, isAdmin, role } = useAuth(); // Added role
+  const { user, userProfile, loading, signOutUser, isAdmin, role } = useAuth();
   const router = useRouter();
+  const [currentTime, setCurrentTime] = useState<string | null>(null);
+
+  useEffect(() => {
+    const updateClock = () => {
+      setCurrentTime(format(new Date(), "dd MMM yyyy HH:mm", { locale: es }));
+    };
+    updateClock(); // Initial call
+    const timerId = setInterval(updateClock, 60000); // Update every minute
+
+    return () => clearInterval(timerId); // Cleanup interval on component unmount
+  }, []);
 
   const handleSignOut = async () => {
     await signOutUser();
@@ -51,7 +65,9 @@ export default function Navbar() {
             ))}
           </nav>
           <div className="flex items-center space-x-3">
-            <span className="hidden sm:inline">Actualizado 17 Jun 2025 11:16</span> {/* Static for now */}
+            <span className="hidden sm:inline">
+              Actualizado {currentTime || <Skeleton className="h-3 w-28 inline-block bg-primary-foreground/20" />}
+            </span>
             {loading ? (
               <Skeleton className="h-5 w-5 rounded-full bg-primary-foreground/20" />
             ) : user ? (
@@ -75,7 +91,7 @@ export default function Navbar() {
                       Dashboard
                     </DropdownMenuItem>
                   )}
-                  {isAdmin && ( // Still useful for specific admin-only links like /admin (if it remains separate)
+                  {isAdmin && (
                     <DropdownMenuItem onClick={() => router.push('/admin')}>
                       <ShieldCheck className="mr-2 h-4 w-4" />
                       Old Admin Panel
