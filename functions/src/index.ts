@@ -1,10 +1,9 @@
+
 /**
  * Firebase Cloud Functions to manage user roles and custom claims.
  */
-
 import * as logger from "firebase-functions/logger";
-import { HttpsError, onCall } from "firebase-functions/v2/https";
-import { onRequest } from "firebase-functions/v2/https";
+import {HttpsError, onCall, onRequest} from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 
 // Initialize Firebase Admin SDK only once
@@ -16,7 +15,7 @@ const db = admin.firestore();
 
 interface SetCustomUserClaimsData {
   userId: string;
-  role: "admin" | "journalist" | "user";
+  role: "admin" | "journalist" | "user"; // Corrected role type
 }
 
 interface SetCustomUserClaimsResult {
@@ -29,20 +28,23 @@ interface SetCustomUserClaimsResult {
  * Callable function to set custom claims for a user.
  * Requires the caller to be an admin.
  */
-export const setCustomUserClaims = onCall<SetCustomUserClaimsData, Promise<SetCustomUserClaimsResult>>(
+export const setCustomUserClaims = onCall<
+  SetCustomUserClaimsData,
+  Promise<SetCustomUserClaimsResult>
+>(
   async (request) => {
     logger.info("setCustomUserClaims called with data:", request.data);
 
     // Check if the caller is authenticated and an admin
     if (!request.auth || request.auth.token.role !== "admin") {
-      logger.error("Permission denied. Caller is not an admin.", { auth: request.auth });
+      logger.error("Permission denied. Caller is not an admin.", {auth: request.auth});
       throw new HttpsError(
         "permission-denied",
         "You must be an admin to perform this action."
       );
     }
 
-    const { userId, role } = request.data;
+    const {userId, role} = request.data;
 
     if (!userId || !role) {
       logger.error("Missing userId or role in request data.");
@@ -52,7 +54,11 @@ export const setCustomUserClaims = onCall<SetCustomUserClaimsData, Promise<SetCu
       );
     }
 
-    const validRoles: Array<SetCustomUserClaimsData["role"]> = ["admin", "journalist", "user"];
+    const validRoles: Array<SetCustomUserClaimsData["role"]> = [
+      "admin",
+      "journalist",
+      "user",
+    ];
     if (!validRoles.includes(role)) {
       logger.error(`Invalid role: ${role}`);
       throw new HttpsError(
@@ -63,18 +69,23 @@ export const setCustomUserClaims = onCall<SetCustomUserClaimsData, Promise<SetCu
 
     try {
       // Set custom claims in Firebase Auth
-      await admin.auth().setCustomUserClaims(userId, { role });
-      logger.info(`Successfully set custom claims for user ${userId} to ${role}.`);
+      await admin.auth().setCustomUserClaims(userId, {role});
+      logger.info(
+        `Successfully set custom claims for user ${userId} to ${role}.`
+      );
 
       // Update role in Firestore user profile
       const userDocRef = db.collection("users").doc(userId);
-      await userDocRef.update({ role });
-      logger.info(`Successfully updated Firestore role for user ${userId} to ${role}.`);
+      await userDocRef.update({role});
+      logger.info(
+        `Successfully updated Firestore role for user ${userId} to ${role}.`
+      );
 
       return {
         success: true,
         message: `Successfully set role '${role}' for user ${userId}.`,
       };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       logger.error(`Error setting custom claims for user ${userId}:`, error);
       throw new HttpsError(
@@ -84,7 +95,6 @@ export const setCustomUserClaims = onCall<SetCustomUserClaimsData, Promise<SetCu
     }
   }
 );
-
 
 /**
  * HTTP GET function to assign the 'admin' role to fabianmunozpuello@gmail.com.
@@ -108,21 +118,31 @@ export const setFabianAdminRole = onRequest(async (request, response) => {
     logger.info(`Found user ${targetEmail} with UID: ${userId}.`);
 
     // Set custom claims
-    await admin.auth().setCustomUserClaims(userId, { role: roleToSet });
-    logger.info(`Successfully set custom claims for user ${targetEmail} to ${roleToSet}.`);
+    await admin.auth().setCustomUserClaims(userId, {role: roleToSet});
+    logger.info(
+      `Successfully set custom claims for user ${targetEmail} to ${roleToSet}.`
+    );
 
     // Update role in Firestore
     const userDocRef = db.collection("users").doc(userId);
-    await userDocRef.update({ role: roleToSet });
-    logger.info(`Successfully updated Firestore role for user ${targetEmail} to ${roleToSet}.`);
+    await userDocRef.update({role: roleToSet});
+    logger.info(
+      `Successfully updated Firestore role for user ${targetEmail} to ${roleToSet}.`
+    );
 
-    response.status(200).send(`Successfully assigned role '${roleToSet}' to ${targetEmail}.`);
+    response.status(200).send(
+      `Successfully assigned role '${roleToSet}' to ${targetEmail}.`
+    );
   } catch (error: any) {
     logger.error(`Error processing request for ${targetEmail}:`, error);
     if (error.code === "auth/user-not-found") {
-      response.status(404).send(`User with email ${targetEmail} not found.`);
+      response.status(404).send(
+        `User with email ${targetEmail} not found.`
+      );
     } else {
-      response.status(500).send(`An error occurred: ${error.message || "Unknown error"}`);
+      response.status(500).send(
+        `An error occurred: ${error.message || "Unknown error"}`
+      );
     }
   }
 });
