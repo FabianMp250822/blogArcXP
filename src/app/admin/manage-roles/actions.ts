@@ -2,10 +2,22 @@
 'use server';
 
 import { z } from 'zod';
-import { auth } from '@/lib/firebase/config';
+import { auth as clientAuth } from '@/lib/firebase/config'; // Client SDK for current user check
 import { getUserProfileByEmail, updateUserProfile } from '@/lib/firebase/firestore';
-import type { UserProfile } from '@/types';
 import { revalidatePath } from 'next/cache';
+import * as admin from 'firebase-admin';
+
+// Initialize Firebase Admin SDK if not already initialized
+if (admin.apps.length === 0) {
+  try {
+    admin.initializeApp({
+      credential: admin.credential.applicationDefault(),
+    });
+  } catch (e) {
+    console.error('Firebase Admin SDK initialization error in manageUserRoleAction:', e);
+  }
+}
+
 
 const ManageUserRoleSchema = z.object({
   userEmail: z.string().email('Invalid email address.'),
@@ -29,13 +41,21 @@ export async function manageUserRoleAction(
   formData: FormData
 ): Promise<ManageUserRoleFormState> {
   
-  // 1. Admin Check
-  const currentUser = auth.currentUser;
+  // 1. Admin Check (using client auth for the calling user)
+  const currentUser = clientAuth.currentUser;
   if (!currentUser) {
     return { message: 'Admin not authenticated.', success: false, errors: { _form: ['Authentication required.'] } };
   }
-  const idTokenResult = await currentUser.getIdTokenResult(true); // Force refresh to get latest claims
-  const isAdmin = idTokenResult.claims.role === 'admin';
+  
+  let isAdmin = false;
+  try {
+    const idTokenResult = await currentUser.getIdTokenResult(true); // Force refresh to get latest claims
+    isAdmin = idTokenResult.claims.role === 'admin';
+  } catch (tokenError) {
+    console.error("Error fetching ID token for admin check:", tokenError);
+    return { message: 'Could not verify admin status.', success: false, errors: { _form: ['Admin verification failed.'] } };
+  }
+
 
   if (!isAdmin) {
     return { message: 'Permission denied. Only admins can manage user roles.', success: false, errors: { _form: ['Unauthorized action.'] } };
@@ -57,34 +77,34 @@ export async function manageUserRoleAction(
 
   const { userEmail, newRole } = validatedFields.data;
 
+  if (admin.apps.length === 0) {
+    return { message: 'Admin SDK not initialized. Cannot set custom claims.', success: false, errors: { _form: ['Server configuration error.'] } };
+  }
+
   try {
     // 3. Find user profile by email in Firestore
     const targetUserProfile = await getUserProfileByEmail(userEmail);
 
-    if (!targetUserProfile) {
+    if (!targetUserProfile || !targetUserProfile.uid) {
       return {
-        message: `User with email '${userEmail}' not found in Firestore. Ensure the user has an existing profile.`,
+        message: `User with email '${userEmail}' not found or UID is missing. Cannot update role.`,
         success: false,
-        errors: { userEmail: ['User not found.'] }
+        errors: { userEmail: ['User not found or profile incomplete.'] }
       };
     }
     
-    if (!targetUserProfile.uid) {
-        return {
-            message: `User profile for '${userEmail}' is incomplete (missing UID). Cannot update role.`,
-            success: false,
-            errors: { _form: ['User profile incomplete.'] }
-        };
-    }
+    // 4. Set custom claims using Admin SDK
+    await admin.auth().setCustomUserClaims(targetUserProfile.uid, { role: newRole });
+    console.log(`Successfully set custom auth claims for ${userEmail} to ${newRole}.`);
 
-    // 4. Update user's role in Firestore
+    // 5. Update user's role in Firestore
     await updateUserProfile(targetUserProfile.uid, { role: newRole });
+    console.log(`Successfully updated Firestore role for ${userEmail} to ${newRole}.`);
 
-    // Revalidate relevant paths if necessary (e.g., if user lists are displayed elsewhere)
-    // revalidatePath('/admin/users'); // Example if there's a user listing page
+    revalidatePath('/admin/manage-roles'); // Or any other relevant path
 
     return { 
-        message: `Successfully updated role for ${userEmail} to '${newRole}' in Firestore. \nIMPORTANT: For permissions to take full effect, Firebase Auth custom claims must be updated for this user via a backend process (e.g., Cloud Function).`, 
+        message: `Successfully updated role and permissions for ${userEmail} to '${newRole}'.`, 
         success: true 
     };
 

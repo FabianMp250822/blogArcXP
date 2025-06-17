@@ -21,7 +21,8 @@ export interface Article {
 export interface Author {
   id: string;
   name: string;
-  avatarUrl?: string; // Made optional as it might not always be present
+  avatarUrl?: string; 
+  // email?: string; // If needed for display or contact
 }
 
 export interface Category {
@@ -34,5 +35,6 @@ export interface UserProfile {
   uid: string;
   email: string | null;
   displayName: string | null;
-  role: 'user' | 'journalist' | 'admin'; // Added journalist role
+  role: 'user' | 'journalist' | 'admin';
+  photoURL?: string | null; // To store avatar URL from Firebase Auth user
 }

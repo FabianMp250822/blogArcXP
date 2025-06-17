@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/use-auth';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { FilePlus, LayoutList, Users } from 'lucide-react';
+import { FilePlus, LayoutList, Users, FolderPlus } from 'lucide-react';
 
 export default function AdminPage() {
   const { userProfile } = useAuth();
@@ -42,13 +42,15 @@ export default function AdminPage() {
              <LayoutList className="mr-2 h-5 w-5 text-primary" /> Manage Articles
             </CardTitle>
             <CardDescription>
-              View, edit, or delete existing articles. (Functionality to be implemented)
+              View, edit, or delete existing articles. (Via Journalist/Admin Dashboard)
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button className="w-full" variant="outline" disabled>
-              Manage Articles (Soon)
-            </Button>
+             <Link href="/dashboard" passHref legacyBehavior>
+                <Button className="w-full" variant="outline">
+                Go to Article Dashboard
+                </Button>
+            </Link>
           </CardContent>
         </Card>
 
@@ -58,13 +60,31 @@ export default function AdminPage() {
              <Users className="mr-2 h-5 w-5 text-primary" /> Manage User Roles
             </CardTitle>
             <CardDescription>
-              Assign roles to users, such as 'journalist'.
+              Assign roles to users, such as 'journalist' or 'admin'.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Link href="/admin/manage-roles" passHref legacyBehavior>
               <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
                 Manage Roles
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-lg transition-shadow">
+          <CardHeader>
+            <CardTitle className="flex items-center font-headline">
+             <FolderPlus className="mr-2 h-5 w-5 text-primary" /> Manage Categories
+            </CardTitle>
+            <CardDescription>
+              Create and view article categories.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/admin/categories" passHref legacyBehavior>
+              <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+                Manage Categories
               </Button>
             </Link>
           </CardContent>

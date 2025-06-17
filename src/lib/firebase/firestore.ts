@@ -40,6 +40,22 @@ const articleFromDoc = (docSnap: QueryDocumentSnapshot<DocumentData> | DocumentD
   };
 };
 
+// Helper to get author and category names for an article
+async function getAuthorAndCategoryNames(authorId?: string, categoryId?: string): Promise<{authorName?: string, categoryName?: string}> {
+    let authorName: string | undefined;
+    let categoryName: string | undefined;
+
+    if (authorId) {
+        const author = await getAuthorById(authorId);
+        authorName = author?.name;
+    }
+    if (categoryId) {
+        const category = await getCategoryById(categoryId);
+        categoryName = category?.name;
+    }
+    return { authorName, categoryName };
+}
+
 
 export async function getPublishedArticles(count: number = 10): Promise<Article[]> {
   const articlesRef = collection(db, 'articles');
@@ -52,14 +68,9 @@ export async function getPublishedArticles(count: number = 10): Promise<Article[
   const snapshot = await getDocs(q);
   const articlesPromises = snapshot.docs.map(async (docSnap) => {
     const article = articleFromDoc(docSnap);
-    if (article.authorId) {
-      const author = await getAuthorById(article.authorId);
-      article.authorName = author?.name || 'Unknown Author';
-    }
-    if (article.categoryId) {
-      const category = await getCategoryById(article.categoryId);
-      article.categoryName = category?.name || 'Uncategorized';
-    }
+    const { authorName, categoryName } = await getAuthorAndCategoryNames(article.authorId, article.categoryId);
+    article.authorName = authorName || 'Unknown Author';
+    article.categoryName = categoryName || 'Uncategorized';
     return article;
   });
   return Promise.all(articlesPromises);
@@ -72,14 +83,9 @@ export async function getArticleById(articleId: string): Promise<Article | null>
     return null;
   }
   const article = articleFromDoc(docSnap);
-  if (article.authorId) {
-    const author = await getAuthorById(article.authorId);
-    article.authorName = author?.name;
-  }
-  if (article.categoryId) {
-    const category = await getCategoryById(article.categoryId);
-    article.categoryName = category?.name;
-  }
+  const { authorName, categoryName } = await getAuthorAndCategoryNames(article.authorId, article.categoryId);
+  article.authorName = authorName;
+  article.categoryName = categoryName;
   return article;
 }
 
@@ -91,14 +97,9 @@ export async function getArticleBySlug(slug: string): Promise<Article | null> {
     return null;
   }
   const article = articleFromDoc(snapshot.docs[0]);
-  if (article.authorId) {
-    const author = await getAuthorById(article.authorId);
-    article.authorName = author?.name;
-  }
-  if (article.categoryId) {
-    const category = await getCategoryById(article.categoryId);
-    article.categoryName = category?.name;
-  }
+  const { authorName, categoryName } = await getAuthorAndCategoryNames(article.authorId, article.categoryId);
+  article.authorName = authorName;
+  article.categoryName = categoryName;
   return article;
 }
 
@@ -137,24 +138,21 @@ export async function getArticlesByCategorySlug(categorySlug: string): Promise<A
   const snapshot = await getDocs(q);
   const articlesPromises = snapshot.docs.map(async (docSnap) => {
     const article = articleFromDoc(docSnap);
-    if (article.authorId) {
-     const author = await getAuthorById(article.authorId);
-     article.authorName = author?.name || 'Unknown Author';
-   }
-   article.categoryName = category.name;
-   return article;
+    const { authorName } = await getAuthorAndCategoryNames(article.authorId);
+    article.authorName = authorName || 'Unknown Author';
+    article.categoryName = category.name; // Category name is already known
+    return article;
   });
   return Promise.all(articlesPromises);
 }
 
 export async function getAuthorById(authorId: string): Promise<Author | null> {
-  const docRef = doc(db, 'authors', authorId); // Assuming 'authors' collection for author details
+  const docRef = doc(db, 'authors', authorId); 
   const docSnap = await getDoc(docRef);
   if (!docSnap.exists()) {
-     // Fallback to users collection if author not in 'authors'
      const userProfile = await getUserProfile(authorId);
      if (userProfile) {
-       return { id: userProfile.uid, name: userProfile.displayName || userProfile.email || 'Unnamed Author', avatarUrl: undefined /* Or a placeholder */};
+       return { id: userProfile.uid, name: userProfile.displayName || userProfile.email || 'Unnamed Author', avatarUrl: userProfile.photoURL || undefined };
      }
     return null;
   }
@@ -162,35 +160,68 @@ export async function getAuthorById(authorId: string): Promise<Author | null> {
   return { id: docSnap.id, name: data.name, avatarUrl: data.avatarUrl };
 }
 
-// Used by admin create form
 export async function createFirestoreArticle(articleData: Omit<Article, 'id' | 'createdAt' | 'publishedAt' | 'authorName' | 'categoryName'>): Promise<string> {
   const articlesRef = collection(db, 'articles');
+  const { authorName, categoryName } = await getAuthorAndCategoryNames(articleData.authorId, articleData.categoryId);
+  
   const docRef = await addDoc(articlesRef, {
     ...articleData,
+    authorName: authorName || 'Unknown Author',
+    categoryName: categoryName || 'Uncategorized',
     createdAt: serverTimestamp(),
     publishedAt: articleData.status === 'published' ? serverTimestamp() : null,
   });
   return docRef.id;
 }
 
-// Used by dashboard create form
 export async function createArticleFromDashboard(
   articleData: Omit<Article, 'id' | 'createdAt' | 'publishedAt' | 'authorName' | 'categoryName' | 'slug'>,
   slug: string
 ): Promise<string> {
   const articlesRef = collection(db, 'articles');
-  const author = articleData.authorId ? await getAuthorById(articleData.authorId) : null;
-  const category = articleData.categoryId ? await getCategoryById(articleData.categoryId) : null;
+  const { authorName, categoryName } = await getAuthorAndCategoryNames(articleData.authorId, articleData.categoryId);
 
   const docRef = await addDoc(articlesRef, {
     ...articleData,
     slug,
-    authorName: author?.name || 'Unknown Author',
-    categoryName: category?.name || 'Uncategorized',
+    authorName: authorName || 'Unknown Author',
+    categoryName: categoryName || 'Uncategorized',
     createdAt: serverTimestamp(),
-    publishedAt: articleData.status === 'published' ? serverTimestamp() : null,
+    publishedAt: articleData.status === 'published' ? serverTimestamp() : null, // Dashboard articles start as draft
   });
   return docRef.id;
+}
+
+export async function updateFirestoreArticle(articleId: string, articleUpdateData: Partial<Omit<Article, 'id' | 'createdAt' | 'authorName' | 'categoryName'>>): Promise<void> {
+    const articleRef = doc(db, 'articles', articleId);
+    
+    const dataToUpdate: Partial<DocumentData> = { ...articleUpdateData };
+
+    // If authorId or categoryId is being updated, fetch their names
+    if (articleUpdateData.authorId || articleUpdateData.categoryId) {
+        const currentArticleSnap = await getDoc(articleRef);
+        const currentArticle = currentArticleSnap.data();
+        const authorIdToFetch = articleUpdateData.authorId || currentArticle?.authorId;
+        const categoryIdToFetch = articleUpdateData.categoryId || currentArticle?.categoryId;
+        
+        const { authorName, categoryName } = await getAuthorAndCategoryNames(authorIdToFetch, categoryIdToFetch);
+        if (authorName) dataToUpdate.authorName = authorName;
+        if (categoryName) dataToUpdate.categoryName = categoryName;
+    }
+    
+    // Handle publishedAt timestamp if status changes to 'published'
+    if (articleUpdateData.status === 'published') {
+        const currentArticleSnap = await getDoc(articleRef);
+        const currentArticleData = currentArticleSnap.data();
+        // Set publishedAt only if it's not already set or if the status is changing to published
+        if (!currentArticleData?.publishedAt || currentArticleData?.status !== 'published') {
+            dataToUpdate.publishedAt = serverTimestamp();
+        }
+    }
+    // If status changes away from 'published', you might want to nullify publishedAt or keep it for history
+    // For now, we only set it when status becomes 'published' for the first time or changes to published.
+
+    await updateDoc(articleRef, dataToUpdate);
 }
 
 
@@ -201,13 +232,33 @@ export async function getAllCategories(): Promise<Category[]> {
   return snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Category));
 }
 
+export async function createCategory(name: string, slug: string): Promise<string> {
+    const categoriesRef = collection(db, 'categories');
+    // Check if category with this slug already exists
+    const q = query(categoriesRef, where('slug', '==', slug), limit(1));
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+        throw new Error(`Category with slug '${slug}' already exists.`);
+    }
+    const docRef = await addDoc(categoriesRef, { name, slug });
+    return docRef.id;
+}
+
+
 export async function getAllAuthors(): Promise<Author[]> {
-  // This function might be less relevant if authors are primarily from UserProfiles.
-  // If 'authors' collection is distinct, keep it. Otherwise, consider querying 'users' with 'journalist' role.
-  const authorsRef = collection(db, 'authors');
-  const q = query(authorsRef, orderBy('name'));
+  const usersRef = collection(db, "users");
+  // Example: Fetch all users who are journalists or admins to populate "Author" dropdowns
+  // This could be refined based on how you want to define "Authors" (e.g., all users, or only specific roles)
+  const q = query(usersRef, where("role", "in", ["journalist", "admin"]));
   const snapshot = await getDocs(q);
-  return snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Author));
+  return snapshot.docs.map(docSnap => {
+    const data = docSnap.data() as UserProfile;
+    return {
+      id: docSnap.id,
+      name: data.displayName || data.email || 'Unnamed User',
+      avatarUrl: data.photoURL || undefined, // Assuming photoURL might be on UserProfile
+    };
+  });
 }
 
 
@@ -215,7 +266,14 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   const userRef = doc(db, 'users', uid);
   const docSnap = await getDoc(userRef);
   if (docSnap.exists()) {
-    return { uid: docSnap.id, ...docSnap.data() } as UserProfile;
+    const data = docSnap.data();
+    return { 
+        uid: docSnap.id, 
+        email: data.email,
+        displayName: data.displayName,
+        role: data.role,
+        photoURL: data.photoURL // Include photoURL if available
+    } as UserProfile;
   }
   return null;
 }
@@ -228,17 +286,25 @@ export async function getUserProfileByEmail(email: string): Promise<UserProfile 
     return null;
   }
   const docSnap = snapshot.docs[0];
-  return { uid: docSnap.id, ...docSnap.data() } as UserProfile;
+  const data = docSnap.data();
+  return { 
+    uid: docSnap.id, 
+    email: data.email,
+    displayName: data.displayName,
+    role: data.role,
+    photoURL: data.photoURL
+  } as UserProfile;
 }
 
 
-export async function createUserProfile(uid: string, email: string | null, displayName: string | null, role: UserProfile['role'] = 'user'): Promise<UserProfile> {
+export async function createUserProfile(uid: string, email: string | null, displayName: string | null, role: UserProfile['role'] = 'user', photoURL?: string | null): Promise<UserProfile> {
   const userRef = doc(db, 'users', uid);
   const newUserProfile: UserProfile = {
     uid,
     email,
     displayName,
     role,
+    photoURL: photoURL || null,
   };
   await setDoc(userRef, newUserProfile, { merge: true });
   return newUserProfile;
@@ -261,12 +327,9 @@ export async function getArticlesByAuthor(authorId: string): Promise<Article[]> 
   const snapshot = await getDocs(q);
   const articlesPromises = snapshot.docs.map(async (docSnap) => {
     const article = articleFromDoc(docSnap);
-    const author = await getAuthorById(authorId); // Fetch author details using the common function
-    article.authorName = author?.name || 'Current User'; // Or a more specific display name
-    if (article.categoryId) {
-      const category = await getCategoryById(article.categoryId);
-      article.categoryName = category?.name || 'Uncategorized';
-    }
+    const { authorName, categoryName } = await getAuthorAndCategoryNames(article.authorId, article.categoryId);
+    article.authorName = authorName || 'Current User'; 
+    article.categoryName = categoryName || 'Uncategorized';
     return article;
   });
   return Promise.all(articlesPromises);
@@ -283,14 +346,9 @@ export async function getAllArticlesForAdmin(filterStatus?: Article['status']): 
   const snapshot = await getDocs(q);
   const articlesPromises = snapshot.docs.map(async (docSnap) => {
     const article = articleFromDoc(docSnap);
-    if (article.authorId) {
-      const author = await getAuthorById(article.authorId);
-      article.authorName = author?.name || 'Unknown Author';
-    }
-    if (article.categoryId) {
-      const category = await getCategoryById(article.categoryId);
-      article.categoryName = category?.name || 'Uncategorized';
-    }
+    const { authorName, categoryName } = await getAuthorAndCategoryNames(article.authorId, article.categoryId);
+    article.authorName = authorName || 'Unknown Author';
+    article.categoryName = categoryName || 'Uncategorized';
     return article;
   });
   return Promise.all(articlesPromises);
@@ -303,19 +361,14 @@ export async function updateArticleStatus(
   const articleRef = doc(db, 'articles', articleId);
   const updateData: { status: Article['status'], publishedAt?: Timestamp } = { status: newStatus };
   if (newStatus === 'published') {
-    // Check if it's already published to avoid overwriting publishedAt if not changing status to published
     const currentArticle = await getArticleById(articleId);
     if (currentArticle && currentArticle.status !== 'published') {
         updateData.publishedAt = serverTimestamp();
     } else if (currentArticle && currentArticle.publishedAt) {
-        // Preserve existing publishedAt if status is already published or being changed from published to something else then back
         updateData.publishedAt = currentArticle.publishedAt; 
     } else {
         updateData.publishedAt = serverTimestamp();
     }
-  } else if (newStatus === 'draft' || newStatus === 'pending_review') {
-    // If moving to draft or pending, explicitly nullify publishedAt unless you want to keep it
-    // updateData.publishedAt = null; // Or handle as per app logic - for now, let's not nullify it to keep history
   }
   await updateDoc(articleRef, updateData);
 }
