@@ -3,10 +3,11 @@
 
 import { revalidatePath } from 'next/cache';
 import { auth } from '@/lib/firebase/config';
-import { getArticleById, updateArticleStatus, deleteDoc, doc, collection } from '@/lib/firebase/firestore'; // Added deleteDoc, doc
+import { getArticleById, updateArticleStatus, getCategoryById } from '@/lib/firebase/firestore';
+import { deleteDoc, doc } from 'firebase/firestore'; // Import deleteDoc and doc directly
 import { deleteFileByUrl } from '@/lib/firebase/storage';
 import type { Article } from '@/types';
-import { db } from '@/lib/firebase/config'; // For direct db access if needed for deleteDoc
+import { db } from '@/lib/firebase/config'; // For direct db access for deleteDoc
 
 async function verifyUserRole(allowedRoles: Array<Article['status'] | 'admin' | 'journalist' | 'owner'>, articleId?: string): Promise<{ uid: string; role: string; article?: Article | null }> {
   const currentUser = auth.currentUser;
@@ -97,8 +98,6 @@ export async function approveArticleAction(articleId: string): Promise<Dashboard
     return { message: error.message || 'Failed to approve article.', success: false };
   }
 }
-// Need to import getCategoryById for revalidation path
-import { getCategoryById } from '@/lib/firebase/firestore';
 
 
 export async function rejectArticleAction(articleId: string): Promise<DashboardActionState> {
