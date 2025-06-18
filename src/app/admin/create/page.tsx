@@ -1,8 +1,8 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useFormState, useFormStatus } from 'react-dom';
+import { useEffect, useState, useActionState } from 'react'; // Changed
+import { useFormStatus } from 'react-dom'; // useFormStatus is still from react-dom
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -63,8 +63,8 @@ export default function CreateArticlePage() {
     },
   });
 
-  const initialState: CreateArticleFormState = { message: '', success: false };
-  const [state, formAction] = useFormState(createArticleAction, initialState);
+  const initialState: CreateArticleFormState = { message: '', success: false, errors: {} };
+  const [state, formAction] = useActionState(createArticleAction, initialState); // Changed
 
   const coverImageFile = watch('coverImage');
 
@@ -109,14 +109,16 @@ export default function CreateArticlePage() {
         description: state.message,
         variant: 'default',
         className: 'bg-green-500 text-white',
+        icon: <CheckCircle className="h-5 w-5 text-white" />
       });
-      reset(); // Reset form fields
+      reset(); 
       setImagePreview(null);
     } else if (state.message && !state.success && (state.errors || state.message !== '')) {
        toast({
         title: 'Error',
         description: state.message || 'Failed to create article. Please check the form.',
         variant: 'destructive',
+        icon: <AlertTriangle className="h-5 w-5" />,
       });
     }
   }, [state, toast, reset]);
@@ -265,3 +267,5 @@ export default function CreateArticlePage() {
     </Card>
   );
 }
+
+    

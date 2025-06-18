@@ -1,8 +1,8 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useFormState } from 'react-dom';
+import { useEffect, useState, useActionState } from 'react'; // Changed from react-dom
+// import { useFormState } from 'react-dom'; // Removed old import
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -14,8 +14,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { getAllAuthors, getAllCategories } from '@/lib/firebase/firestore';
-import type { Author, Category } from '@/types';
+import { getAllCategories } from '@/lib/firebase/firestore'; // Removed getAllAuthors as it's not used
+import type { Category } from '@/types'; // Removed Author as it's not used
 import { Loader2, UploadCloud } from 'lucide-react';
 import Image from 'next/image';
 import { useAuth } from '@/hooks/use-auth'; // For authorId
@@ -24,9 +24,7 @@ const FormSchema = z.object({
   title: z.string().min(5, 'Title must be at least 5 characters long.'),
   excerpt: z.string().min(10, 'Excerpt must be at least 10 characters.').max(300, 'Max 300 characters.'),
   content: z.string().min(50, 'Content must be at least 50 characters long.'),
-  // authorId: z.string().min(1, 'Author is required.'), // Will be set automatically
   categoryId: z.string().min(1, 'Category is required.'),
-  // status: z.enum(['draft', 'published']), // Will default to draft
   coverImage: z.instanceof(FileList)
     .refine(files => files?.length === 1, 'Cover image is required.')
     .refine(files => files?.[0]?.size <= 5 * 1024 * 1024, 'Cover image must be less than 5MB.')
@@ -36,7 +34,8 @@ const FormSchema = z.object({
 type FormValues = z.infer<typeof FormSchema>;
 
 function SubmitButton() {
-  const { pending } = useFormState(createArticleAction, { message: '', success: false });
+  // useFormStatus is still from react-dom for form pending states with server actions
+  const { pending } = useActionState(createArticleAction, { message: '', success: false });
   return (
     <Button type="submit" disabled={pending} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
       {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -61,8 +60,8 @@ export default function CreateDashboardArticlePage() {
     },
   });
 
-  const initialState: CreateDashboardArticleFormState = { message: '', success: false };
-  const [state, formAction] = useFormState(createArticleAction, initialState);
+  const initialState: CreateDashboardArticleFormState = { message: '', success: false, errors: {} };
+  const [state, formAction] = useActionState(createArticleAction, initialState);
 
   const coverImageFile = watch('coverImage');
 
@@ -109,7 +108,7 @@ export default function CreateDashboardArticlePage() {
       });
       reset(); 
       setImagePreview(null);
-    } else if (state.message && !state.success) {
+    } else if (state.message && !state.success && (state.errors || state.message !== '')) {
        toast({
         title: 'Error',
         description: state.message || 'Failed to create article. Please check the form.',
@@ -220,3 +219,5 @@ export default function CreateDashboardArticlePage() {
     </Card>
   );
 }
+
+    

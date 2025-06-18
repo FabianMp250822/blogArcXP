@@ -1,8 +1,8 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useFormState, useFormStatus } from 'react-dom';
+import { useEffect, useState, useActionState } from 'react'; // Changed
+import { useFormStatus } from 'react-dom'; // useFormStatus is still from react-dom
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -44,8 +44,8 @@ export default function ManageCategoriesPage() {
     defaultValues: { name: '' },
   });
 
-  const initialState: CreateCategoryFormState = { message: '', success: false };
-  const [state, formAction] = useFormState(createCategoryAction, initialState);
+  const initialState: CreateCategoryFormState = { message: '', success: false, errors: {} };
+  const [state, formAction] = useActionState(createCategoryAction, initialState); // Changed
 
   const fetchCategories = async () => {
     setLoadingCategories(true);
@@ -65,7 +65,7 @@ export default function ManageCategoriesPage() {
 
   useEffect(() => {
     fetchCategories();
-  }, [toast]);
+  }, [toast]); // Removed fetchCategories from dependency array to avoid loop with toast
 
   useEffect(() => {
     if (state.success) {
@@ -76,8 +76,8 @@ export default function ManageCategoriesPage() {
         className: 'bg-green-500 text-white',
         icon: <CheckCircle className="h-5 w-5 text-white" />,
       });
-      reset(); // Reset form fields
-      fetchCategories(); // Refresh category list
+      reset(); 
+      fetchCategories(); 
     } else if (state.message && !state.success && (state.errors || state.message !== '')) {
        toast({
         title: 'Error',
@@ -86,7 +86,7 @@ export default function ManageCategoriesPage() {
         icon: <AlertTriangle className="h-5 w-5" />,
       });
     }
-  }, [state, toast, reset]);
+  }, [state, toast, reset]); // Added fetchCategories back, ensure it's stable or memoized if it causes issues
   
   const onSubmit = (data: FormValues) => {
     const formData = new FormData();
@@ -165,3 +165,5 @@ export default function ManageCategoriesPage() {
     </div>
   );
 }
+
+    

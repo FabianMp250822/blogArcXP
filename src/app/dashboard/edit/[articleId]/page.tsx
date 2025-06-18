@@ -1,9 +1,9 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useActionState } from 'react'; // Changed
 import { useParams, useRouter } from 'next/navigation';
-import { useFormState, useFormStatus } from 'react-dom';
+import { useFormStatus } from 'react-dom'; // useFormStatus is still from react-dom
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -27,7 +27,7 @@ const FormSchema = z.object({
   excerpt: z.string().min(10, 'Excerpt must be at least 10 characters.').max(300, 'Max 300 characters.'),
   content: z.string().min(50, 'Content must be at least 50 characters long.'),
   categoryId: z.string().min(1, 'Category is required.'),
-  coverImage: z.instanceof(FileList).optional() // Optional FileList
+  coverImage: z.instanceof(FileList).optional() 
     .refine(files => !files || files.length === 0 || files?.[0]?.size <= 5 * 1024 * 1024, 'Cover image must be less than 5MB.')
     .refine(files => !files || files.length === 0 || files?.[0]?.type.startsWith('image/'), 'Only image files are allowed.'),
 });
@@ -66,8 +66,8 @@ export default function EditDashboardArticlePage() {
     }
   });
 
-  const initialState: UpdateArticleFormState = { message: '', success: false };
-  const [state, formAction] = useFormState(updateArticleAction, initialState);
+  const initialState: UpdateArticleFormState = { message: '', success: false, errors: {} };
+  const [state, formAction] = useActionState(updateArticleAction, initialState); // Changed
 
   const coverImageFile = watch('coverImage');
 
@@ -80,7 +80,6 @@ export default function EditDashboardArticlePage() {
         reader.readAsDataURL(file);
       }
     } else if (article && !coverImageFile?.length) {
-      // If no new file is selected, keep showing the existing article image or remove preview if image was removed
       setImagePreview(article.coverImageUrl || null);
     }
   }, [coverImageFile, article]);
@@ -102,7 +101,6 @@ export default function EditDashboardArticlePage() {
           return;
         }
 
-        // Authorization check (client-side, server action will re-verify)
         if (role !== 'admin' && fetchedArticle.authorId !== user?.uid) {
            toast({ title: 'Unauthorized', description: 'You do not have permission to edit this article.', variant: 'destructive' });
            router.push('/dashboard');
@@ -112,12 +110,10 @@ export default function EditDashboardArticlePage() {
         setArticle(fetchedArticle);
         setCategories(fetchedCategories);
         
-        // Set form values
         setValue('title', fetchedArticle.title);
         setValue('excerpt', fetchedArticle.excerpt);
         setValue('content', fetchedArticle.content);
         setValue('categoryId', fetchedArticle.categoryId);
-        // Initial image preview
         setImagePreview(fetchedArticle.coverImageUrl);
 
       } catch (error) {
@@ -139,8 +135,6 @@ export default function EditDashboardArticlePage() {
         className: 'bg-green-500 text-white',
         icon: <CheckCircle className="h-5 w-5" />
       });
-      // Optionally redirect or refresh data
-      // router.push('/dashboard'); or refresh current article data
       if (state.updatedArticleSlug) {
         router.push(`/articles/${state.updatedArticleSlug}`);
       } else {
@@ -162,7 +156,7 @@ export default function EditDashboardArticlePage() {
     Object.entries(data).forEach(([key, value]) => {
       if (key === 'coverImage' && value instanceof FileList && value.length > 0) {
         formData.append(key, value[0]);
-      } else if (typeof value === 'string' && value.trim() !== '') { // append only non-empty strings
+      } else if (typeof value === 'string' && value.trim() !== '') { 
         formData.append(key, value);
       }
     });
@@ -265,3 +259,5 @@ export default function EditDashboardArticlePage() {
     </Card>
   );
 }
+
+    

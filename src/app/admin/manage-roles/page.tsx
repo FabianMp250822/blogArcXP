@@ -1,9 +1,8 @@
 
 'use client';
 
-import { useEffect }
-from 'react';
-import { useFormState, useFormStatus } from 'react-dom';
+import { useEffect, useActionState } from 'react'; // Changed
+import { useFormStatus } from 'react-dom'; // useFormStatus is still from react-dom
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -48,8 +47,8 @@ export default function ManageUserRolesPage() {
     },
   });
 
-  const initialState: ManageUserRoleFormState = { message: '', success: false };
-  const [state, formAction] = useFormState(manageUserRoleAction, initialState);
+  const initialState: ManageUserRoleFormState = { message: '', success: false, errors: {} };
+  const [state, formAction] = useActionState(manageUserRoleAction, initialState); // Changed
 
   useEffect(() => {
     if (state.success) {
@@ -60,7 +59,7 @@ export default function ManageUserRolesPage() {
         className: 'bg-green-500 text-white',
         icon: <CheckCircle className="h-5 w-5 text-white" />,
       });
-      reset(); // Reset form fields
+      reset(); 
     } else if (state.message && !state.success && (state.errors || state.message !== '')) {
        toast({
         title: 'Error',
@@ -134,3 +133,5 @@ export default function ManageUserRolesPage() {
     </Card>
   );
 }
+
+    
