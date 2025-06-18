@@ -1,8 +1,8 @@
 
 'use client';
 
-import { useEffect, useState, useActionState } from 'react'; // Changed from react-dom
-// import { useFormState } from 'react-dom'; // Removed old import
+import { useEffect, useState, useActionState } from 'react'; 
+import { useFormStatus } from 'react-dom'; // Added useFormStatus import
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -14,11 +14,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { getAllCategories } from '@/lib/firebase/firestore'; // Removed getAllAuthors as it's not used
-import type { Category } from '@/types'; // Removed Author as it's not used
+import { getAllCategories } from '@/lib/firebase/firestore'; 
+import type { Category } from '@/types'; 
 import { Loader2, UploadCloud } from 'lucide-react';
 import Image from 'next/image';
-import { useAuth } from '@/hooks/use-auth'; // For authorId
+import { useAuth } from '@/hooks/use-auth'; 
 
 const FormSchema = z.object({
   title: z.string().min(5, 'Title must be at least 5 characters long.'),
@@ -34,8 +34,7 @@ const FormSchema = z.object({
 type FormValues = z.infer<typeof FormSchema>;
 
 function SubmitButton() {
-  // useFormStatus is still from react-dom for form pending states with server actions
-  const { pending } = useActionState(createArticleAction, { message: '', success: false });
+  const { pending } = useFormStatus(); // Correctly use useFormStatus
   return (
     <Button type="submit" disabled={pending} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
       {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -46,7 +45,7 @@ function SubmitButton() {
 
 export default function CreateDashboardArticlePage() {
   const { toast } = useToast();
-  const { user } = useAuth(); // Get current user for authorId
+  const { user } = useAuth(); 
   const [categories, setCategories] = useState<Category[]>([]);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
@@ -130,7 +129,7 @@ export default function CreateDashboardArticlePage() {
         formData.append(key, String(value));
       }
     });
-    formData.append('authorId', user.uid); // Add authorId
+    formData.append('authorId', user.uid); 
     formAction(formData);
   };
 
@@ -219,5 +218,3 @@ export default function CreateDashboardArticlePage() {
     </Card>
   );
 }
-
-    
