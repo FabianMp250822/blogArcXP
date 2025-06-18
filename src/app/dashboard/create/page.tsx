@@ -2,7 +2,7 @@
 'use client';
 
 import { useEffect, useState, useActionState } from 'react'; 
-import { useFormStatus } from 'react-dom'; // Added useFormStatus import
+import { useFormStatus } from 'react-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -13,28 +13,40 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { getAllCategories } from '@/lib/firebase/firestore'; 
 import type { Category } from '@/types'; 
-import { Loader2, UploadCloud } from 'lucide-react';
+import { Loader2, UploadCloud, PlusCircle, CheckCircle, AlertTriangle } from 'lucide-react';
 import Image from 'next/image';
 import { useAuth } from '@/hooks/use-auth'; 
+
+const CREATE_NEW_CATEGORY_VALUE = '__CREATE_NEW__';
 
 const FormSchema = z.object({
   title: z.string().min(5, 'Title must be at least 5 characters long.'),
   excerpt: z.string().min(10, 'Excerpt must be at least 10 characters.').max(300, 'Max 300 characters.'),
   content: z.string().min(50, 'Content must be at least 50 characters long.'),
-  categoryId: z.string().min(1, 'Category is required.'),
+  categoryId: z.string().min(1, 'Category selection or creation is required.'),
+  newCategoryName: z.string().optional(),
   coverImage: z.instanceof(FileList)
     .refine(files => files?.length === 1, 'Cover image is required.')
     .refine(files => files?.[0]?.size <= 5 * 1024 * 1024, 'Cover image must be less than 5MB.')
     .refine(files => files?.[0]?.type.startsWith('image/'), 'Only image files are allowed.'),
+}).superRefine((data, ctx) => {
+  if (data.categoryId === CREATE_NEW_CATEGORY_VALUE && (!data.newCategoryName || data.newCategoryName.trim().length < 2)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'New category name must be at least 2 characters.',
+      path: ['newCategoryName'],
+    });
+  }
 });
 
 type FormValues = z.infer<typeof FormSchema>;
 
 function SubmitButton() {
-  const { pending } = useFormStatus(); // Correctly use useFormStatus
+  const { pending } = useFormStatus();
   return (
     <Button type="submit" disabled={pending} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
       {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -48,14 +60,16 @@ export default function CreateDashboardArticlePage() {
   const { user } = useAuth(); 
   const [categories, setCategories] = useState<Category[]>([]);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
 
-  const { control, register, handleSubmit, formState: { errors }, reset, watch } = useForm<FormValues>({
+  const { control, register, handleSubmit, formState: { errors }, reset, watch, setValue } = useForm<FormValues>({
     resolver: zodResolver(FormSchema),
     defaultValues: {
       title: '',
       excerpt: '',
       content: '',
       categoryId: '',
+      newCategoryName: '',
     },
   });
 
@@ -63,6 +77,16 @@ export default function CreateDashboardArticlePage() {
   const [state, formAction] = useActionState(createArticleAction, initialState);
 
   const coverImageFile = watch('coverImage');
+  const selectedCategoryId = watch('categoryId');
+
+  useEffect(() => {
+    if (selectedCategoryId === CREATE_NEW_CATEGORY_VALUE) {
+      setShowNewCategoryInput(true);
+    } else {
+      setShowNewCategoryInput(false);
+      setValue('newCategoryName', ''); 
+    }
+  }, [selectedCategoryId, setValue]);
 
   useEffect(() => {
     if (coverImageFile && coverImageFile.length > 0) {
@@ -79,22 +103,22 @@ export default function CreateDashboardArticlePage() {
     }
   }, [coverImageFile]);
 
+  const fetchInitialData = async () => {
+    try {
+      const fetchedCategories = await getAllCategories();
+      setCategories(fetchedCategories);
+    } catch (error) {
+      toast({
+        title: 'Error fetching categories',
+        description: 'Could not load categories.',
+        variant: 'destructive',
+      });
+    }
+  };
 
   useEffect(() => {
-    async function fetchData() {
-      try {
-        const fetchedCategories = await getAllCategories();
-        setCategories(fetchedCategories);
-      } catch (error) {
-        toast({
-          title: 'Error fetching data',
-          description: 'Could not load categories.',
-          variant: 'destructive',
-        });
-      }
-    }
-    fetchData();
-  }, [toast]);
+    fetchInitialData();
+  }, [toast]); // Removed fetchInitialData dependency
 
   useEffect(() => {
     if (!state) return;
@@ -104,17 +128,21 @@ export default function CreateDashboardArticlePage() {
         description: state.message,
         variant: 'default',
         className: 'bg-green-500 text-white',
+        icon: <CheckCircle className="h-5 w-5 text-white" />,
       });
       reset(); 
       setImagePreview(null);
+      setShowNewCategoryInput(false);
+      fetchInitialData(); // Re-fetch categories
     } else if (state.message && !state.success && (state.errors || state.message !== '')) {
        toast({
-        title: 'Error',
-        description: state.message || 'Failed to create article. Please check the form.',
+        title: 'Error Creating Article',
+        description: state.message || state.errors?._form?.join(', ') || 'Failed to create article. Please check the form.',
         variant: 'destructive',
+        icon: <AlertTriangle className="h-5 w-5" />,
       });
     }
-  }, [state, toast, reset]);
+  }, [state, toast, reset]); // Removed fetchInitialData dependency
   
   const onSubmit = (data: FormValues) => {
     if (!user?.uid) {
@@ -125,10 +153,13 @@ export default function CreateDashboardArticlePage() {
     Object.entries(data).forEach(([key, value]) => {
       if (key === 'coverImage' && value instanceof FileList && value.length > 0) {
         formData.append(key, value[0]);
-      } else if (value !== undefined && value !== null) {
+      } else if (value !== undefined && value !== null && key !== 'newCategoryName') {
         formData.append(key, String(value));
       }
     });
+    if (data.categoryId === CREATE_NEW_CATEGORY_VALUE && data.newCategoryName) {
+        formData.append('newCategoryName', data.newCategoryName);
+    }
     formData.append('authorId', user.uid); 
     formAction(formData);
   };
@@ -143,7 +174,11 @@ export default function CreateDashboardArticlePage() {
       <CardContent>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           {state?.errors?._form && (
-            <div className="text-sm text-destructive mt-1 p-2 bg-destructive/10 rounded-md">{state.errors._form.join(', ')}</div>
+             <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Form Error</AlertTitle>
+                <AlertDescription>{state.errors._form.join(', ')}</AlertDescription>
+              </Alert>
           )}
 
           <div>
@@ -170,20 +205,39 @@ export default function CreateDashboardArticlePage() {
               name="categoryId"
               control={control}
               render={({ field }) => (
-                <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value || ""}>
+                <Select onValueChange={field.onChange} value={field.value || ""}>
                   <SelectTrigger id="categoryId" className="mt-1" aria-invalid={errors.categoryId ? "true" : "false"}>
-                    <SelectValue placeholder="Select category" />
+                    <SelectValue placeholder="Select category or create new" />
                   </SelectTrigger>
                   <SelectContent>
                     {categories.map((category) => (
                       <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>
                     ))}
+                    <SelectItem value={CREATE_NEW_CATEGORY_VALUE}>
+                      <span className="flex items-center">
+                        <PlusCircle className="mr-2 h-4 w-4 text-primary" /> Create new category...
+                      </span>
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               )}
             />
             {errors.categoryId && <p className="text-sm text-destructive mt-1">{errors.categoryId.message}</p>}
           </div>
+
+          {showNewCategoryInput && (
+            <div>
+              <Label htmlFor="newCategoryName" className="font-medium">New Category Name</Label>
+              <Input 
+                id="newCategoryName" 
+                {...register('newCategoryName')} 
+                aria-invalid={errors.newCategoryName ? "true" : "false"} 
+                className="mt-1"
+                placeholder="Enter name for the new category"
+              />
+              {errors.newCategoryName && <p className="text-sm text-destructive mt-1">{errors.newCategoryName.message}</p>}
+            </div>
+          )}
           
           <div>
             <Label htmlFor="coverImage" className="font-medium">Cover Image</Label>
