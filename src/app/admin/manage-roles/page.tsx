@@ -1,8 +1,8 @@
 
 'use client';
 
-import { useEffect, useActionState } from 'react'; // Changed
-import { useFormStatus } from 'react-dom'; // useFormStatus is still from react-dom
+import { useEffect, useActionState } from 'react'; 
+import { useFormStatus } from 'react-dom'; 
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -16,6 +16,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, AlertTriangle, CheckCircle } from 'lucide-react';
 import type { UserProfile } from '@/types';
+import { useAuth } from '@/hooks/use-auth'; // Import useAuth
 
 const FormSchema = z.object({
   userEmail: z.string().email('Please enter a valid email address.'),
@@ -38,6 +39,7 @@ function SubmitButton() {
 
 export default function ManageUserRolesPage() {
   const { toast } = useToast();
+  const { user } = useAuth(); // Get current admin user
 
   const { control, register, handleSubmit, formState: { errors }, reset } = useForm<FormValues>({
     resolver: zodResolver(FormSchema),
@@ -48,7 +50,7 @@ export default function ManageUserRolesPage() {
   });
 
   const initialState: ManageUserRoleFormState = { message: '', success: false, errors: {} };
-  const [state, formAction] = useActionState(manageUserRoleAction, initialState); // Changed
+  const [state, formAction] = useActionState(manageUserRoleAction, initialState); 
 
   useEffect(() => {
     if (state.success) {
@@ -70,18 +72,29 @@ export default function ManageUserRolesPage() {
     }
   }, [state, toast, reset]);
   
-  const onSubmit = (data: FormValues) => {
-    const formData = new FormData();
-    formData.append('userEmail', data.userEmail);
-    formData.append('newRole', data.newRole);
-    formAction(formData);
+  const onSubmit = async (data: FormValues) => { // Make onSubmit async
+    if (!user) {
+      toast({ title: 'Authentication Error', description: 'Admin not authenticated.', variant: 'destructive'});
+      return;
+    }
+    try {
+      const idToken = await user.getIdToken(); // Get admin's ID token
+      const formData = new FormData();
+      formData.append('userEmail', data.userEmail);
+      formData.append('newRole', data.newRole);
+      formData.append('idToken', idToken); // Add admin's ID token
+      formAction(formData);
+    } catch (error) {
+      console.error("Error getting admin ID token:", error);
+      toast({ title: 'Authentication Error', description: 'Could not verify admin session.', variant: 'destructive'});
+    }
   };
 
   return (
     <Card className="w-full max-w-xl mx-auto shadow-xl">
       <CardHeader>
         <CardTitle className="text-3xl font-headline text-primary">Manage User Roles</CardTitle>
-        <CardDescription>Assign or update roles for users in the system. Changes here update Firestore profiles; Firebase Auth custom claims must be updated separately via a backend process for permissions to take effect.</CardDescription>
+        <CardDescription>Assign or update roles for users in the system. Changes will update Firestore profiles and Firebase Auth custom claims.</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -133,5 +146,3 @@ export default function ManageUserRolesPage() {
     </Card>
   );
 }
-
-    

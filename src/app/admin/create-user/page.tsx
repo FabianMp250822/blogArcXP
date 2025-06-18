@@ -16,6 +16,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, AlertTriangle, CheckCircle, UserPlus } from 'lucide-react';
 import type { UserProfile } from '@/types';
+import { useAuth } from '@/hooks/use-auth'; // Import useAuth
 
 const FormSchema = z.object({
   email: z.string().email('Please enter a valid email address.'),
@@ -38,6 +39,7 @@ function SubmitButton() {
 
 export default function CreateUserPage() {
   const { toast } = useToast();
+  const { user } = useAuth(); // Get current admin user from useAuth
 
   const { control, register, handleSubmit, formState: { errors }, reset } = useForm<FormValues>({
     resolver: zodResolver(FormSchema),
@@ -72,15 +74,26 @@ export default function CreateUserPage() {
     }
   }, [state, toast, reset]);
   
-  const onSubmit = (data: FormValues) => {
-    const formData = new FormData();
-    formData.append('email', data.email);
-    formData.append('password', data.password);
-    if (data.displayName) {
-      formData.append('displayName', data.displayName);
+  const onSubmit = async (data: FormValues) => { // Make onSubmit async
+    if (!user) {
+      toast({ title: 'Authentication Error', description: 'Admin not authenticated.', variant: 'destructive'});
+      return;
     }
-    formData.append('role', data.role);
-    formAction(formData);
+    try {
+      const idToken = await user.getIdToken(); // Get ID token from current admin
+      const formData = new FormData();
+      formData.append('email', data.email);
+      formData.append('password', data.password);
+      if (data.displayName) {
+        formData.append('displayName', data.displayName);
+      }
+      formData.append('role', data.role);
+      formData.append('idToken', idToken); // Add admin's ID token
+      formAction(formData);
+    } catch (error) {
+      console.error("Error getting admin ID token:", error);
+      toast({ title: 'Authentication Error', description: 'Could not verify admin session.', variant: 'destructive'});
+    }
   };
 
   return (

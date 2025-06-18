@@ -19,6 +19,7 @@ import { getAllAuthors, getAllCategories } from '@/lib/firebase/firestore';
 import type { Author, Category } from '@/types';
 import { Loader2, CheckCircle, AlertTriangle, UploadCloud, PlusCircle } from 'lucide-react';
 import Image from 'next/image';
+import { useAuth } from '@/hooks/use-auth'; // Import useAuth
 
 const CREATE_NEW_CATEGORY_VALUE = '__CREATE_NEW__';
 
@@ -58,6 +59,7 @@ function SubmitButton() {
 
 export default function CreateArticlePage() {
   const { toast } = useToast();
+  const { user } = useAuth(); // Get current admin user
   const [authors, setAuthors] = useState<Author[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -87,7 +89,7 @@ export default function CreateArticlePage() {
       setShowNewCategoryInput(true);
     } else {
       setShowNewCategoryInput(false);
-      setValue('newCategoryName', ''); // Clear new category name if an existing one is selected
+      setValue('newCategoryName', ''); 
     }
   }, [selectedCategoryId, setValue]);
 
@@ -123,7 +125,7 @@ export default function CreateArticlePage() {
 
   useEffect(() => {
     fetchInitialData();
-  }, [toast]); // Removed fetchInitialData from dep array
+  }, [toast]);
 
   useEffect(() => {
     if (state.success) {
@@ -137,7 +139,7 @@ export default function CreateArticlePage() {
       reset();
       setImagePreview(null);
       setShowNewCategoryInput(false);
-      fetchInitialData(); // Re-fetch categories in case a new one was added
+      fetchInitialData(); 
     } else if (state.message && !state.success && (state.errors || state.message !== '')) {
        toast({
         title: 'Error Creating Article',
@@ -146,23 +148,33 @@ export default function CreateArticlePage() {
         icon: <AlertTriangle className="h-5 w-5" />,
       });
     }
-  }, [state, toast, reset]); // Removed fetchInitialData
+  }, [state, toast, reset]);
   
-  const onSubmit = (data: FormValues) => {
-    const formData = new FormData();
-    Object.entries(data).forEach(([key, value]) => {
-      if (key === 'coverImage' && value instanceof FileList && value.length > 0) {
-        formData.append(key, value[0]);
-      } else if (value !== undefined && value !== null && key !== 'newCategoryName') { // Exclude newCategoryName if not creating new
-        formData.append(key, String(value));
-      }
-    });
-    if (data.categoryId === CREATE_NEW_CATEGORY_VALUE && data.newCategoryName) {
-        formData.append('newCategoryName', data.newCategoryName);
+  const onSubmit = async (data: FormValues) => { // Make onSubmit async
+    if (!user) {
+      toast({ title: 'Authentication Error', description: 'Admin not authenticated.', variant: 'destructive'});
+      return;
     }
-    formAction(formData);
+    try {
+      const idToken = await user.getIdToken(); // Get admin's ID token
+      const formData = new FormData();
+      Object.entries(data).forEach(([key, value]) => {
+        if (key === 'coverImage' && value instanceof FileList && value.length > 0) {
+          formData.append(key, value[0]);
+        } else if (value !== undefined && value !== null && key !== 'newCategoryName') { 
+          formData.append(key, String(value));
+        }
+      });
+      if (data.categoryId === CREATE_NEW_CATEGORY_VALUE && data.newCategoryName) {
+          formData.append('newCategoryName', data.newCategoryName);
+      }
+      formData.append('idToken', idToken); // Add admin's ID token
+      formAction(formData);
+    } catch (error) {
+      console.error("Error getting admin ID token:", error);
+      toast({ title: 'Authentication Error', description: 'Could not verify admin session.', variant: 'destructive'});
+    }
   };
-
 
   return (
     <Card className="w-full max-w-3xl mx-auto shadow-xl">
@@ -314,4 +326,3 @@ export default function CreateArticlePage() {
     </Card>
   );
 }
-    

@@ -118,7 +118,7 @@ export default function CreateDashboardArticlePage() {
 
   useEffect(() => {
     fetchInitialData();
-  }, [toast]); // Removed fetchInitialData dependency
+  }, [toast]);
 
   useEffect(() => {
     if (!state) return;
@@ -133,7 +133,7 @@ export default function CreateDashboardArticlePage() {
       reset(); 
       setImagePreview(null);
       setShowNewCategoryInput(false);
-      fetchInitialData(); // Re-fetch categories
+      fetchInitialData(); 
     } else if (state.message && !state.success && (state.errors || state.message !== '')) {
        toast({
         title: 'Error Creating Article',
@@ -142,28 +142,34 @@ export default function CreateDashboardArticlePage() {
         icon: <AlertTriangle className="h-5 w-5" />,
       });
     }
-  }, [state, toast, reset]); // Removed fetchInitialData dependency
+  }, [state, toast, reset]);
   
-  const onSubmit = (data: FormValues) => {
+  const onSubmit = async (data: FormValues) => { // Make onSubmit async
     if (!user?.uid) {
       toast({ title: 'Authentication Error', description: 'You must be logged in to create an article.', variant: 'destructive'});
       return;
     }
-    const formData = new FormData();
-    Object.entries(data).forEach(([key, value]) => {
-      if (key === 'coverImage' && value instanceof FileList && value.length > 0) {
-        formData.append(key, value[0]);
-      } else if (value !== undefined && value !== null && key !== 'newCategoryName') {
-        formData.append(key, String(value));
+    try {
+      const idToken = await user.getIdToken(); // Get ID token
+      const formData = new FormData();
+      Object.entries(data).forEach(([key, value]) => {
+        if (key === 'coverImage' && value instanceof FileList && value.length > 0) {
+          formData.append(key, value[0]);
+        } else if (value !== undefined && value !== null && key !== 'newCategoryName') {
+          formData.append(key, String(value));
+        }
+      });
+      if (data.categoryId === CREATE_NEW_CATEGORY_VALUE && data.newCategoryName) {
+          formData.append('newCategoryName', data.newCategoryName);
       }
-    });
-    if (data.categoryId === CREATE_NEW_CATEGORY_VALUE && data.newCategoryName) {
-        formData.append('newCategoryName', data.newCategoryName);
+      formData.append('authorId', user.uid); 
+      formData.append('idToken', idToken); // Add ID token to form data
+      formAction(formData);
+    } catch (error) {
+      console.error("Error getting ID token:", error);
+      toast({ title: 'Authentication Error', description: 'Could not verify your session. Please try again.', variant: 'destructive'});
     }
-    formData.append('authorId', user.uid); 
-    formAction(formData);
   };
-
 
   return (
     <Card className="w-full max-w-3xl mx-auto shadow-xl">

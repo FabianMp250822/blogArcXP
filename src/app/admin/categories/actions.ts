@@ -4,9 +4,18 @@
 import { z } from 'zod';
 import { createCategory } from '@/lib/firebase/firestore';
 import { revalidatePath } from 'next/cache';
-import { auth } from '@/lib/firebase/config'; // For admin check
+// import { auth } from '@/lib/firebase/config'; // No longer using client auth for admin check
+import * as admin from 'firebase-admin';
 
-// Helper to generate a slug from name
+// Initialize Firebase Admin SDK
+if (admin.apps.length === 0) {
+  try {
+    admin.initializeApp(); 
+  } catch (e) {
+    console.error('Firebase Admin SDK initialization error in createCategoryAction:', e);
+  }
+}
+
 function generateSlug(name: string): string {
   return name
     .toLowerCase()
@@ -19,12 +28,14 @@ function generateSlug(name: string): string {
 
 const CategorySchema = z.object({
   name: z.string().min(2, 'Category name must be at least 2 characters long.'),
+  idToken: z.string().min(1, 'Admin authentication token is required.'), // Added idToken
 });
 
 export type CreateCategoryFormState = {
   message: string;
   errors?: {
     name?: string[];
+    idToken?: string[];
     _form?: string[];
   };
   success: boolean;
@@ -34,20 +45,29 @@ export async function createCategoryAction(
   prevState: CreateCategoryFormState,
   formData: FormData
 ): Promise<CreateCategoryFormState> {
-  // Admin Check
-  const currentUser = auth.currentUser;
-  if (!currentUser) {
-    return { message: 'Admin not authenticated.', success: false, errors: { _form: ['Authentication required.'] } };
-  }
-  const idTokenResult = await currentUser.getIdTokenResult(true);
-  const isAdmin = idTokenResult.claims.role === 'admin';
 
-  if (!isAdmin) {
-    return { message: 'Permission denied. Only admins can create categories.', success: false, errors: { _form: ['Unauthorized action.'] } };
+  const idToken = formData.get('idToken') as string;
+  if (!idToken) {
+    return { message: 'Admin authentication token missing.', success: false, errors: { _form: ['Authentication required.'] } };
+  }
+
+  if (admin.apps.length === 0) {
+    return { message: 'Server configuration error. Please try again later.', success: false, errors: { _form: ['Admin SDK not initialized.'] } };
+  }
+
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    if (decodedToken.role !== 'admin') {
+      return { message: 'Permission denied. Only admins can create categories.', success: false, errors: { _form: ['Unauthorized action.'] } };
+    }
+  } catch (error) {
+    console.error("Error verifying admin ID token:", error);
+    return { message: 'Could not verify admin status.', success: false, errors: { _form: ['Admin verification failed.'] } };
   }
 
   const validatedFields = CategorySchema.safeParse({
     name: formData.get('name'),
+    idToken: idToken, // For Zod validation
   });
 
   if (!validatedFields.success) {
@@ -64,8 +84,8 @@ export async function createCategoryAction(
   try {
     await createCategory(name, slug);
     revalidatePath('/admin/categories');
-    revalidatePath('/admin/create'); // Revalidate article creation form in case categories are fetched there
-    // Potentially revalidate other paths where categories are displayed or used
+    revalidatePath('/admin/create'); 
+    revalidatePath('/dashboard/create');
 
     return { message: `Category "${name}" created successfully!`, success: true };
 
@@ -73,7 +93,7 @@ export async function createCategoryAction(
     console.error('Error creating category:', error);
     let errorMessage = 'An unexpected error occurred while creating the category.';
     if (error instanceof Error) {
-        errorMessage = error.message; // Use specific error message if available (e.g., duplicate slug)
+        errorMessage = error.message; 
     }
     return {
       message: errorMessage,

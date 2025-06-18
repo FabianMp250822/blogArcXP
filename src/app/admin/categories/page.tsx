@@ -1,8 +1,8 @@
 
 'use client';
 
-import { useEffect, useState, useActionState } from 'react'; // Changed
-import { useFormStatus } from 'react-dom'; // useFormStatus is still from react-dom
+import { useEffect, useState, useActionState } from 'react'; 
+import { useFormStatus } from 'react-dom'; 
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -18,6 +18,7 @@ import type { Category } from '@/types';
 import { Loader2, AlertTriangle, CheckCircle, ListChecks } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { useAuth } from '@/hooks/use-auth'; // Import useAuth
 
 const FormSchema = z.object({
   name: z.string().min(2, 'Category name must be at least 2 characters long.'),
@@ -36,6 +37,7 @@ function SubmitButton() {
 
 export default function ManageCategoriesPage() {
   const { toast } = useToast();
+  const { user } = useAuth(); // Get current admin user
   const [categories, setCategories] = useState<Category[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(true);
 
@@ -45,7 +47,7 @@ export default function ManageCategoriesPage() {
   });
 
   const initialState: CreateCategoryFormState = { message: '', success: false, errors: {} };
-  const [state, formAction] = useActionState(createCategoryAction, initialState); // Changed
+  const [state, formAction] = useActionState(createCategoryAction, initialState); 
 
   const fetchCategories = async () => {
     setLoadingCategories(true);
@@ -65,7 +67,7 @@ export default function ManageCategoriesPage() {
 
   useEffect(() => {
     fetchCategories();
-  }, [toast]); // Removed fetchCategories from dependency array to avoid loop with toast
+  }, [toast]); 
 
   useEffect(() => {
     if (state.success) {
@@ -86,12 +88,23 @@ export default function ManageCategoriesPage() {
         icon: <AlertTriangle className="h-5 w-5" />,
       });
     }
-  }, [state, toast, reset]); // Added fetchCategories back, ensure it's stable or memoized if it causes issues
+  }, [state, toast, reset]); 
   
-  const onSubmit = (data: FormValues) => {
-    const formData = new FormData();
-    formData.append('name', data.name);
-    formAction(formData);
+  const onSubmit = async (data: FormValues) => { // Make onSubmit async
+    if (!user) {
+      toast({ title: 'Authentication Error', description: 'Admin not authenticated.', variant: 'destructive'});
+      return;
+    }
+    try {
+      const idToken = await user.getIdToken(); // Get admin's ID token
+      const formData = new FormData();
+      formData.append('name', data.name);
+      formData.append('idToken', idToken); // Add admin's ID token
+      formAction(formData);
+    } catch (error) {
+        console.error("Error getting admin ID token:", error);
+        toast({ title: 'Authentication Error', description: 'Could not verify admin session.', variant: 'destructive'});
+    }
   };
 
   return (
@@ -165,5 +178,3 @@ export default function ManageCategoriesPage() {
     </div>
   );
 }
-
-    

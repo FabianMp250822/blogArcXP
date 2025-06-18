@@ -2,13 +2,23 @@
 'use server';
 
 import { z } from 'zod';
-import { createArticleFromDashboard, createCategory } from '@/lib/firebase/firestore'; // Added createCategory
+import { createArticleFromDashboard, createCategory } from '@/lib/firebase/firestore'; 
 import { uploadFile } from '@/lib/firebase/storage';
 import type { Article } from '@/types';
 import { revalidatePath } from 'next/cache';
-import { auth } from '@/lib/firebase/config';
+// import { auth } from '@/lib/firebase/config'; // No longer using client auth directly for user check
+import * as admin from 'firebase-admin';
 
 const CREATE_NEW_CATEGORY_VALUE = '__CREATE_NEW__';
+
+// Initialize Firebase Admin SDK
+if (admin.apps.length === 0) {
+  try {
+    admin.initializeApp(); // Assumes ADC or GOOGLE_APPLICATION_CREDENTIALS
+  } catch (e) {
+    console.error('Firebase Admin SDK initialization error in createArticleAction (dashboard):', e);
+  }
+}
 
 function generateSlug(text: string): string {
   return text
@@ -20,7 +30,6 @@ function generateSlug(text: string): string {
     .replace(/-+$/, ''); 
 }
 
-
 const ArticleSchema = z.object({
   title: z.string().min(5, 'Title must be at least 5 characters long.'),
   excerpt: z.string().min(10, 'Excerpt must be at least 10 characters long.').max(300, 'Excerpt must be at most 300 characters long.'),
@@ -29,6 +38,7 @@ const ArticleSchema = z.object({
   categoryId: z.string().min(1, 'Category selection or creation is required.'),
   newCategoryName: z.string().optional(),
   coverImage: z.instanceof(File).refine(file => file.size > 0, 'Cover image is required.').refine(file => file.size < 5 * 1024 * 1024, 'Cover image must be less than 5MB.'),
+  idToken: z.string().min(1, 'Authentication token is required.'), // Added idToken to schema
 }).superRefine((data, ctx) => {
   if (data.categoryId === CREATE_NEW_CATEGORY_VALUE && (!data.newCategoryName || data.newCategoryName.trim().length < 2)) {
     ctx.addIssue({
@@ -46,7 +56,6 @@ const ArticleSchema = z.object({
   }
 });
 
-
 export type CreateDashboardArticleFormState = {
   message: string;
   errors?: {
@@ -57,6 +66,7 @@ export type CreateDashboardArticleFormState = {
     categoryId?: string[];
     newCategoryName?: string[];
     coverImage?: string[];
+    idToken?: string[];
     _form?: string[];
   };
   success: boolean;
@@ -67,24 +77,39 @@ export async function createArticleAction(
   formData: FormData
 ): Promise<CreateDashboardArticleFormState> {
   
-  const currentUser = auth.currentUser;
-  if (!currentUser) {
-    return { message: 'User not authenticated.', success: false, errors: { _form: ['Authentication required.'] } };
+  const idToken = formData.get('idToken') as string;
+  if (!idToken) {
+    return { message: 'Authentication token missing.', success: false, errors: { _form: ['Authentication token is required.'] } };
+  }
+
+  if (admin.apps.length === 0) {
+    return { message: 'Server configuration error. Please try again later.', success: false, errors: { _form: ['Admin SDK not initialized.'] } };
+  }
+
+  let decodedToken;
+  try {
+    decodedToken = await admin.auth().verifyIdToken(idToken);
+  } catch (error) {
+    console.error("Error verifying ID token:", error);
+    return { message: 'Invalid authentication session.', success: false, errors: { _form: ['Your session is invalid. Please log in again.'] } };
   }
   
-  const authorIdFromForm = formData.get('authorId') as string; // This comes from the page logic now
-  if (currentUser.uid !== authorIdFromForm) {
-     return { message: 'Author ID mismatch.', success: false, errors: { _form: ['Invalid author information.'] } };
+  const authenticatedUserUid = decodedToken.uid;
+  const authorIdFromForm = formData.get('authorId') as string; 
+
+  if (authenticatedUserUid !== authorIdFromForm) {
+     return { message: 'Author ID mismatch or unauthorized.', success: false, errors: { _form: ['Invalid author information or not authorized.'] } };
   }
 
   const rawFormData = {
     title: formData.get('title'),
     excerpt: formData.get('excerpt'),
     content: formData.get('content'),
-    authorId: authorIdFromForm,
+    authorId: authorIdFromForm, // Keep for Zod validation, will use authenticatedUserUid for DB
     categoryId: formData.get('categoryId'),
     newCategoryName: formData.get('newCategoryName') || undefined,
     coverImage: formData.get('coverImage'),
+    idToken: idToken, // Include for Zod validation
   };
 
   const validatedFields = ArticleSchema.safeParse(rawFormData);
@@ -97,7 +122,8 @@ export async function createArticleAction(
     };
   }
 
-  const { coverImage, title, newCategoryName, categoryId: selectedCategoryId, ...articleData } = validatedFields.data;
+  const { coverImage, title, newCategoryName, categoryId: selectedCategoryId, ...articleDataFromSchema } = validatedFields.data;
+  // authorId from articleDataFromSchema is validated but we will use authenticatedUserUid for security.
   const slug = generateSlug(title);
   let finalCategoryId = selectedCategoryId;
 
@@ -107,7 +133,7 @@ export async function createArticleAction(
         try {
             finalCategoryId = await createCategory(newCategoryName, categorySlug);
             revalidatePath('/admin/categories'); 
-            revalidatePath('/dashboard/create'); // Revalidate this form
+            revalidatePath('/dashboard/create'); 
             revalidatePath('/admin/create'); 
         } catch (categoryError: any) {
             return {
@@ -129,8 +155,10 @@ export async function createArticleAction(
     const coverImageUrl = await uploadFile(coverImage, imagePath);
 
     const newArticleData: Omit<Article, 'id' | 'createdAt' | 'publishedAt' | 'authorName' | 'categoryName' | 'slug'> = {
-      ...articleData,
-      title, // ensure title is included
+      title: articleDataFromSchema.title, // Use validated title
+      excerpt: articleDataFromSchema.excerpt, // Use validated excerpt
+      content: articleDataFromSchema.content, // Use validated content
+      authorId: authenticatedUserUid, // CRITICAL: Use UID from verified token
       status: 'draft', 
       coverImageUrl,
       categoryId: finalCategoryId,

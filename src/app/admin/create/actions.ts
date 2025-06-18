@@ -2,15 +2,24 @@
 'use server';
 
 import { z } from 'zod';
-import { createFirestoreArticle, createCategory } from '@/lib/firebase/firestore'; // Added createCategory
+import { createFirestoreArticle, createCategory } from '@/lib/firebase/firestore'; 
 import { uploadFile } from '@/lib/firebase/storage';
 import type { Article } from '@/types';
 import { revalidatePath } from 'next/cache';
-import { auth } from '@/lib/firebase/config';
+// import { auth } from '@/lib/firebase/config'; // No longer using client auth directly
+import * as admin from 'firebase-admin';
 
 const CREATE_NEW_CATEGORY_VALUE = '__CREATE_NEW__';
 
-// Helper to generate a slug from title or category name
+// Initialize Firebase Admin SDK
+if (admin.apps.length === 0) {
+  try {
+    admin.initializeApp(); // Assumes ADC or GOOGLE_APPLICATION_CREDENTIALS
+  } catch (e) {
+    console.error('Firebase Admin SDK initialization error in createArticleAction (admin):', e);
+  }
+}
+
 function generateSlug(text: string): string {
   return text
     .toLowerCase()
@@ -30,12 +39,13 @@ const ArticleSchema = z.object({
   newCategoryName: z.string().optional(),
   status: z.enum(['draft', 'published']),
   coverImage: z.instanceof(File).refine(file => file.size > 0, 'Cover image is required.').refine(file => file.size < 5 * 1024 * 1024, 'Cover image must be less than 5MB.'),
+  idToken: z.string().min(1, 'Authentication token is required.'), // Added idToken
 }).superRefine((data, ctx) => {
   if (data.categoryId === CREATE_NEW_CATEGORY_VALUE && (!data.newCategoryName || data.newCategoryName.trim().length < 2)) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: 'New category name must be at least 2 characters.',
-      path: ['newCategoryName'], // Target the newCategoryName field for error
+      path: ['newCategoryName'], 
     });
   }
   if (data.categoryId !== CREATE_NEW_CATEGORY_VALUE && data.newCategoryName && data.newCategoryName.trim().length > 0) {
@@ -46,7 +56,6 @@ const ArticleSchema = z.object({
     });
   }
 });
-
 
 export type CreateArticleFormState = {
   message: string;
@@ -59,6 +68,7 @@ export type CreateArticleFormState = {
     newCategoryName?: string[];
     status?: string[];
     coverImage?: string[];
+    idToken?: string[];
     _form?: string[];
   };
   success: boolean;
@@ -69,26 +79,36 @@ export async function createArticleAction(
   formData: FormData
 ): Promise<CreateArticleFormState> {
   
-  const currentUser = auth.currentUser;
-  if (!currentUser) {
-    return { message: 'User not authenticated.', success: false, errors: { _form: ['Authentication required.'] } };
+  const idToken = formData.get('idToken') as string;
+  if (!idToken) {
+    return { message: 'Admin authentication token missing.', success: false, errors: { _form: ['Authentication required.'] } };
   }
-  
-  const idTokenResult = await currentUser.getIdTokenResult(true);
-  const isAdmin = idTokenResult.claims.role === 'admin';
-  if (!isAdmin) {
-    return { message: 'Permission denied. Only admins can create articles here.', success: false, errors: { _form: ['Unauthorized action.'] } };
+
+  if (admin.apps.length === 0) {
+    return { message: 'Server configuration error. Please try again later.', success: false, errors: { _form: ['Admin SDK not initialized.'] } };
+  }
+
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    if (decodedToken.role !== 'admin') {
+      return { message: 'Permission denied. Only admins can create articles here.', success: false, errors: { _form: ['Unauthorized action.'] } };
+    }
+    // Admin is verified, proceed. The admin can select any authorId from the form.
+  } catch (error) {
+    console.error("Error verifying admin ID token:", error);
+    return { message: 'Could not verify admin status.', success: false, errors: { _form: ['Admin verification failed.'] } };
   }
 
   const rawFormData = {
     title: formData.get('title'),
     excerpt: formData.get('excerpt'),
     content: formData.get('content'),
-    authorId: formData.get('authorId'),
+    authorId: formData.get('authorId'), // Admin selects authorId
     categoryId: formData.get('categoryId'),
-    newCategoryName: formData.get('newCategoryName') || undefined, // Ensure it's undefined if empty
+    newCategoryName: formData.get('newCategoryName') || undefined, 
     status: formData.get('status'),
     coverImage: formData.get('coverImage'),
+    idToken: idToken, // For Zod validation
   };
   
   const validatedFields = ArticleSchema.safeParse(rawFormData);
@@ -101,18 +121,18 @@ export async function createArticleAction(
     };
   }
 
-  const { coverImage, title, newCategoryName, categoryId: selectedCategoryId, ...articleData } = validatedFields.data;
+  // Destructure validated data, excluding idToken from articleData
+  const { coverImage, title, newCategoryName, categoryId: selectedCategoryId, idToken: _, ...articleData } = validatedFields.data;
   const slug = generateSlug(title); 
   let finalCategoryId = selectedCategoryId;
 
   try {
-    // 1. Handle Category: Create if new, otherwise use existing
     if (selectedCategoryId === CREATE_NEW_CATEGORY_VALUE && newCategoryName) {
         const categorySlug = generateSlug(newCategoryName);
         try {
-            finalCategoryId = await createCategory(newCategoryName, categorySlug); // createCategory returns the new category ID
-            revalidatePath('/admin/categories'); // Revalidate if a new category was made
-            revalidatePath('/admin/create'); // Revalidate this form to update category list
+            finalCategoryId = await createCategory(newCategoryName, categorySlug); 
+            revalidatePath('/admin/categories'); 
+            revalidatePath('/admin/create'); 
             revalidatePath('/dashboard/create'); 
         } catch (categoryError: any) {
             return {
@@ -129,28 +149,23 @@ export async function createArticleAction(
          };
     }
 
-
-    // 2. Upload image to Cloud Storage
     const imageFileName = `${slug}-${Date.now()}-${coverImage.name}`;
     const imagePath = `articles/${imageFileName}`;
     const coverImageUrl = await uploadFile(coverImage, imagePath);
 
-    // 3. Create article data for Firestore
     const newArticleData: Omit<Article, 'id' | 'createdAt' | 'publishedAt' | 'authorName' | 'categoryName'> = {
-      ...articleData,
-      title, // Ensure title is included from validated data
+      ...articleData, // Contains validated authorId, status etc.
+      title, 
       slug,
       coverImageUrl,
-      categoryId: finalCategoryId, // Use the resolved category ID
+      categoryId: finalCategoryId, 
     };
 
-    // 4. Create document in Firestore
     await createFirestoreArticle(newArticleData);
 
-    // Revalidate paths
     revalidatePath('/');
     revalidatePath(`/articles/${slug}`);
-    revalidatePath('/dashboard'); // Revalidate dashboard if articles appear there
+    revalidatePath('/dashboard'); 
 
     return { message: 'Article created successfully!', success: true };
 
