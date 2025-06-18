@@ -2,17 +2,20 @@
 'use server';
 
 import { z } from 'zod';
-// import { auth as clientAuth } from '@/lib/firebase/config'; // No longer using clientAuth for admin check
 import { createUserProfile } from '@/lib/firebase/firestore';
-import { revalidatePath } from 'next/cache';
+// import { revalidatePath } from 'next/cache'; // Not strictly needed for user creation unless listing users somewhere
 import * as admin from 'firebase-admin';
 
-// Initialize Firebase Admin SDK if not already initialized
+let adminSDKError: string | null = null;
 if (admin.apps.length === 0) {
   try {
-    admin.initializeApp(); 
+    admin.initializeApp();
+    if (admin.apps.length === 0) {
+        throw new Error("admin.initializeApp() was called but admin.apps is still empty.");
+    }
   } catch (e: any) {
-    console.error('Firebase Admin SDK initialization error in createUserAction:', e.message);
+    console.error('Firebase Admin SDK initialization error in createUserAction:', e);
+    adminSDKError = e.message || "Unknown error during Firebase Admin SDK initialization.";
   }
 }
 
@@ -40,20 +43,21 @@ export async function createUserAction(
   prevState: CreateUserFormState,
   formData: FormData
 ): Promise<CreateUserFormState> {
-  
+
+  if (admin.apps.length === 0) {
+    const detail = adminSDKError ? `Details: ${adminSDKError}` : "Please check server logs for specific errors.";
+    return {
+        message: `Firebase Admin SDK failed to initialize. ${detail}`,
+        success: false,
+        errors: { _form: [`Critical: Admin SDK initialization failure. ${detail}`] }
+    };
+  }
+
   const idToken = formData.get('idToken') as string;
   if (!idToken) {
     return { message: 'Admin authentication token missing.', success: false, errors: { _form: ['Authentication required.'] } };
   }
 
-  if (admin.apps.length === 0) {
-    return { 
-        message: 'Firebase Admin SDK failed to initialize. Please check server logs for details.', 
-        success: false, 
-        errors: { _form: ['Critical: Admin SDK initialization failure.'] } 
-    };
-  }
-  
   try {
     const decodedToken = await admin.auth().verifyIdToken(idToken);
     if (decodedToken.role !== 'admin') {
@@ -96,9 +100,9 @@ export async function createUserAction(
     await createUserProfile(uid, email, displayName || null, role, userRecord.photoURL);
     console.log(`Successfully created Firestore profile for ${email} with role ${role}.`);
 
-    return { 
-        message: `Successfully created user ${email} with role '${role}'.`, 
-        success: true 
+    return {
+        message: `Successfully created user ${email} with role '${role}'.`,
+        success: true
     };
 
   } catch (error: any) {
@@ -111,7 +115,7 @@ export async function createUserAction(
     } else if (error instanceof Error) {
         errorMessage = error.message;
     }
-    
+
     return {
       message: errorMessage,
       errors: { _form: [errorMessage] },

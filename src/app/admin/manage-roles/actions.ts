@@ -2,17 +2,20 @@
 'use server';
 
 import { z } from 'zod';
-// import { auth as clientAuth } from '@/lib/firebase/config'; // No longer using client auth for admin check
 import { getUserProfileByEmail, updateUserProfile } from '@/lib/firebase/firestore';
 import { revalidatePath } from 'next/cache';
 import * as admin from 'firebase-admin';
 
-// Initialize Firebase Admin SDK if not already initialized
+let adminSDKError: string | null = null;
 if (admin.apps.length === 0) {
   try {
     admin.initializeApp();
+    if (admin.apps.length === 0) {
+        throw new Error("admin.initializeApp() was called but admin.apps is still empty.");
+    }
   } catch (e: any) {
-    console.error('Firebase Admin SDK initialization error in manageUserRoleAction:', e.message);
+    console.error('Firebase Admin SDK initialization error in manageUserRoleAction:', e);
+    adminSDKError = e.message || "Unknown error during Firebase Admin SDK initialization.";
   }
 }
 
@@ -21,7 +24,7 @@ const ManageUserRoleSchema = z.object({
   newRole: z.enum(['user', 'journalist', 'admin'], {
     errorMap: () => ({ message: 'Invalid role selected.' }),
   }),
-  idToken: z.string().min(1, 'Admin authentication token is required.'), // Added idToken
+  idToken: z.string().min(1, 'Admin authentication token is required.'),
 });
 
 export type ManageUserRoleFormState = {
@@ -39,20 +42,21 @@ export async function manageUserRoleAction(
   prevState: ManageUserRoleFormState,
   formData: FormData
 ): Promise<ManageUserRoleFormState> {
-  
+
+  if (admin.apps.length === 0) {
+    const detail = adminSDKError ? `Details: ${adminSDKError}` : "Please check server logs for specific errors.";
+    return {
+        message: `Firebase Admin SDK failed to initialize. ${detail}`,
+        success: false,
+        errors: { _form: [`Critical: Admin SDK initialization failure. ${detail}`] }
+    };
+  }
+
   const idToken = formData.get('idToken') as string;
   if (!idToken) {
     return { message: 'Admin authentication token missing.', success: false, errors: { _form: ['Authentication required.'] } };
   }
 
-  if (admin.apps.length === 0) {
-    return { 
-        message: 'Firebase Admin SDK failed to initialize. Please check server logs for details.', 
-        success: false, 
-        errors: { _form: ['Critical: Admin SDK initialization failure.'] } 
-    };
-  }
-  
   try {
     const decodedToken = await admin.auth().verifyIdToken(idToken);
     if (decodedToken.role !== 'admin') {
@@ -66,7 +70,7 @@ export async function manageUserRoleAction(
   const validatedFields = ManageUserRoleSchema.safeParse({
     userEmail: formData.get('userEmail'),
     newRole: formData.get('newRole'),
-    idToken: idToken, // For Zod validation
+    idToken: idToken,
   });
 
   if (!validatedFields.success) {
@@ -89,18 +93,18 @@ export async function manageUserRoleAction(
         errors: { userEmail: ['User not found or profile incomplete.'] }
       };
     }
-    
+
     await admin.auth().setCustomUserClaims(targetUserProfile.uid, { role: newRole });
     console.log(`Successfully set custom auth claims for ${userEmail} to ${newRole}.`);
 
     await updateUserProfile(targetUserProfile.uid, { role: newRole });
     console.log(`Successfully updated Firestore role for ${userEmail} to ${newRole}.`);
 
-    revalidatePath('/admin/manage-roles'); 
+    revalidatePath('/admin/manage-roles');
 
-    return { 
-        message: `Successfully updated role and permissions for ${userEmail} to '${newRole}'.`, 
-        success: true 
+    return {
+        message: `Successfully updated role and permissions for ${userEmail} to '${newRole}'.`,
+        success: true
     };
 
   } catch (error) {

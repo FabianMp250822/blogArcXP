@@ -4,31 +4,34 @@
 import { z } from 'zod';
 import { createCategory } from '@/lib/firebase/firestore';
 import { revalidatePath } from 'next/cache';
-// import { auth } from '@/lib/firebase/config'; // No longer using client auth for admin check
 import * as admin from 'firebase-admin';
 
-// Initialize Firebase Admin SDK
+let adminSDKError: string | null = null;
 if (admin.apps.length === 0) {
   try {
-    admin.initializeApp(); 
+    admin.initializeApp();
+    if (admin.apps.length === 0) {
+        throw new Error("admin.initializeApp() was called but admin.apps is still empty.");
+    }
   } catch (e: any) {
-    console.error('Firebase Admin SDK initialization error in createCategoryAction:', e.message);
+    console.error('Firebase Admin SDK initialization error in createCategoryAction:', e);
+    adminSDKError = e.message || "Unknown error during Firebase Admin SDK initialization.";
   }
 }
 
 function generateSlug(name: string): string {
   return name
     .toLowerCase()
-    .replace(/\s+/g, '-') 
-    .replace(/[^\w-]+/g, '') 
-    .replace(/--+/g, '-') 
-    .replace(/^-+/, '') 
-    .replace(/-+$/, ''); 
+    .replace(/\s+/g, '-')
+    .replace(/[^\w-]+/g, '')
+    .replace(/--+/g, '-')
+    .replace(/^-+/, '')
+    .replace(/-+$/, '');
 }
 
 const CategorySchema = z.object({
   name: z.string().min(2, 'Category name must be at least 2 characters long.'),
-  idToken: z.string().min(1, 'Admin authentication token is required.'), // Added idToken
+  idToken: z.string().min(1, 'Admin authentication token is required.'),
 });
 
 export type CreateCategoryFormState = {
@@ -46,17 +49,18 @@ export async function createCategoryAction(
   formData: FormData
 ): Promise<CreateCategoryFormState> {
 
+  if (admin.apps.length === 0) {
+    const detail = adminSDKError ? `Details: ${adminSDKError}` : "Please check server logs for specific errors.";
+    return {
+        message: `Firebase Admin SDK failed to initialize. ${detail}`,
+        success: false,
+        errors: { _form: [`Critical: Admin SDK initialization failure. ${detail}`] }
+    };
+  }
+
   const idToken = formData.get('idToken') as string;
   if (!idToken) {
     return { message: 'Admin authentication token missing.', success: false, errors: { _form: ['Authentication required.'] } };
-  }
-
-  if (admin.apps.length === 0) {
-    return { 
-        message: 'Firebase Admin SDK failed to initialize. Please check server logs for details.', 
-        success: false, 
-        errors: { _form: ['Critical: Admin SDK initialization failure.'] } 
-    };
   }
 
   try {
@@ -71,7 +75,7 @@ export async function createCategoryAction(
 
   const validatedFields = CategorySchema.safeParse({
     name: formData.get('name'),
-    idToken: idToken, // For Zod validation
+    idToken: idToken,
   });
 
   if (!validatedFields.success) {
@@ -88,7 +92,7 @@ export async function createCategoryAction(
   try {
     await createCategory(name, slug);
     revalidatePath('/admin/categories');
-    revalidatePath('/admin/create'); 
+    revalidatePath('/admin/create');
     revalidatePath('/dashboard/create');
 
     return { message: `Category "${name}" created successfully!`, success: true };
@@ -97,7 +101,7 @@ export async function createCategoryAction(
     console.error('Error creating category:', error);
     let errorMessage = 'An unexpected error occurred while creating the category.';
     if (error instanceof Error) {
-        errorMessage = error.message; 
+        errorMessage = error.message;
     }
     return {
       message: errorMessage,

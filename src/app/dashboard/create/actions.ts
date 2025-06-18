@@ -2,43 +2,46 @@
 'use server';
 
 import { z } from 'zod';
-import { createArticleFromDashboard, createCategory } from '@/lib/firebase/firestore'; 
+import { createArticleFromDashboard, createCategory } from '@/lib/firebase/firestore';
 import { uploadFile } from '@/lib/firebase/storage';
 import type { Article } from '@/types';
 import { revalidatePath } from 'next/cache';
-// import { auth } from '@/lib/firebase/config'; // No longer using client auth directly for user check
 import * as admin from 'firebase-admin';
 
 const CREATE_NEW_CATEGORY_VALUE = '__CREATE_NEW__';
 
-// Initialize Firebase Admin SDK
+let adminSDKError: string | null = null;
 if (admin.apps.length === 0) {
   try {
-    admin.initializeApp(); // Assumes ADC or GOOGLE_APPLICATION_CREDENTIALS
+    admin.initializeApp();
+    if (admin.apps.length === 0) {
+        throw new Error("admin.initializeApp() was called but admin.apps is still empty.");
+    }
   } catch (e: any) {
-    console.error('Firebase Admin SDK initialization error in createArticleAction (dashboard):', e.message);
+    console.error('Firebase Admin SDK initialization error in createArticleAction (dashboard):', e);
+    adminSDKError = e.message || "Unknown error during Firebase Admin SDK initialization.";
   }
 }
 
 function generateSlug(text: string): string {
   return text
     .toLowerCase()
-    .replace(/\s+/g, '-') 
-    .replace(/[^\w-]+/g, '') 
-    .replace(/--+/g, '-') 
-    .replace(/^-+/, '') 
-    .replace(/-+$/, ''); 
+    .replace(/\s+/g, '-')
+    .replace(/[^\w-]+/g, '')
+    .replace(/--+/g, '-')
+    .replace(/^-+/, '')
+    .replace(/-+$/, '');
 }
 
 const ArticleSchema = z.object({
   title: z.string().min(5, 'Title must be at least 5 characters long.'),
   excerpt: z.string().min(10, 'Excerpt must be at least 10 characters long.').max(300, 'Excerpt must be at most 300 characters long.'),
   content: z.string().min(50, 'Content must be at least 50 characters long.'),
-  authorId: z.string().min(1, 'Author ID is required.'), 
+  authorId: z.string().min(1, 'Author ID is required.'),
   categoryId: z.string().min(1, 'Category selection or creation is required.'),
   newCategoryName: z.string().optional(),
   coverImage: z.instanceof(File).refine(file => file.size > 0, 'Cover image is required.').refine(file => file.size < 5 * 1024 * 1024, 'Cover image must be less than 5MB.'),
-  idToken: z.string().min(1, 'Authentication token is required.'), // Added idToken to schema
+  idToken: z.string().min(1, 'Authentication token is required.'),
 }).superRefine((data, ctx) => {
   if (data.categoryId === CREATE_NEW_CATEGORY_VALUE && (!data.newCategoryName || data.newCategoryName.trim().length < 2)) {
     ctx.addIssue({
@@ -76,18 +79,19 @@ export async function createArticleAction(
   prevState: CreateDashboardArticleFormState,
   formData: FormData
 ): Promise<CreateDashboardArticleFormState> {
-  
+
+  if (admin.apps.length === 0) {
+    const detail = adminSDKError ? `Details: ${adminSDKError}` : "Please check server logs for specific errors.";
+    return {
+        message: `Firebase Admin SDK failed to initialize. ${detail}`,
+        success: false,
+        errors: { _form: [`Critical: Admin SDK initialization failure. ${detail}`] }
+    };
+  }
+
   const idToken = formData.get('idToken') as string;
   if (!idToken) {
     return { message: 'Authentication token missing.', success: false, errors: { _form: ['Authentication token is required.'] } };
-  }
-
-  if (admin.apps.length === 0) {
-    return { 
-        message: 'Firebase Admin SDK failed to initialize. Please check server logs for details.', 
-        success: false, 
-        errors: { _form: ['Critical: Admin SDK initialization failure.'] } 
-    };
   }
 
   let decodedToken;
@@ -97,9 +101,9 @@ export async function createArticleAction(
     console.error("Error verifying ID token:", error);
     return { message: 'Invalid authentication session.', success: false, errors: { _form: ['Your session is invalid. Please log in again.'] } };
   }
-  
+
   const authenticatedUserUid = decodedToken.uid;
-  const authorIdFromForm = formData.get('authorId') as string; 
+  const authorIdFromForm = formData.get('authorId') as string;
 
   if (authenticatedUserUid !== authorIdFromForm) {
      return { message: 'Author ID mismatch or unauthorized.', success: false, errors: { _form: ['Invalid author information or not authorized.'] } };
@@ -109,11 +113,11 @@ export async function createArticleAction(
     title: formData.get('title'),
     excerpt: formData.get('excerpt'),
     content: formData.get('content'),
-    authorId: authorIdFromForm, // Keep for Zod validation, will use authenticatedUserUid for DB
+    authorId: authorIdFromForm,
     categoryId: formData.get('categoryId'),
     newCategoryName: formData.get('newCategoryName') || undefined,
     coverImage: formData.get('coverImage'),
-    idToken: idToken, // Include for Zod validation
+    idToken: idToken,
   };
 
   const validatedFields = ArticleSchema.safeParse(rawFormData);
@@ -127,7 +131,6 @@ export async function createArticleAction(
   }
 
   const { coverImage, title, newCategoryName, categoryId: selectedCategoryId, ...articleDataFromSchema } = validatedFields.data;
-  // authorId from articleDataFromSchema is validated but we will use authenticatedUserUid for security.
   const slug = generateSlug(title);
   let finalCategoryId = selectedCategoryId;
 
@@ -136,9 +139,9 @@ export async function createArticleAction(
         const categorySlug = generateSlug(newCategoryName);
         try {
             finalCategoryId = await createCategory(newCategoryName, categorySlug);
-            revalidatePath('/admin/categories'); 
-            revalidatePath('/dashboard/create'); 
-            revalidatePath('/admin/create'); 
+            revalidatePath('/admin/categories');
+            revalidatePath('/dashboard/create');
+            revalidatePath('/admin/create');
         } catch (categoryError: any) {
             return {
                 message: `Failed to create new category: ${categoryError.message}`,
@@ -159,11 +162,11 @@ export async function createArticleAction(
     const coverImageUrl = await uploadFile(coverImage, imagePath);
 
     const newArticleData: Omit<Article, 'id' | 'createdAt' | 'publishedAt' | 'authorName' | 'categoryName' | 'slug'> = {
-      title: articleDataFromSchema.title, // Use validated title
-      excerpt: articleDataFromSchema.excerpt, // Use validated excerpt
-      content: articleDataFromSchema.content, // Use validated content
-      authorId: authenticatedUserUid, // CRITICAL: Use UID from verified token
-      status: 'draft', 
+      title: articleDataFromSchema.title,
+      excerpt: articleDataFromSchema.excerpt,
+      content: articleDataFromSchema.content,
+      authorId: authenticatedUserUid,
+      status: 'draft',
       coverImageUrl,
       categoryId: finalCategoryId,
     };
@@ -171,7 +174,7 @@ export async function createArticleAction(
     await createArticleFromDashboard(newArticleData, slug);
 
     revalidatePath('/dashboard');
-    revalidatePath('/'); 
+    revalidatePath('/');
 
     return { message: 'Article saved as draft successfully!', success: true };
 
