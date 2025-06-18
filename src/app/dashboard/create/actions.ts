@@ -15,8 +15,8 @@ const CREATE_NEW_CATEGORY_VALUE = '__CREATE_NEW__';
 if (admin.apps.length === 0) {
   try {
     admin.initializeApp(); // Assumes ADC or GOOGLE_APPLICATION_CREDENTIALS
-  } catch (e) {
-    console.error('Firebase Admin SDK initialization error in createArticleAction (dashboard):', e);
+  } catch (e: any) {
+    console.error('Firebase Admin SDK initialization error in createArticleAction (dashboard):', e.message);
   }
 }
 
@@ -83,7 +83,11 @@ export async function createArticleAction(
   }
 
   if (admin.apps.length === 0) {
-    return { message: 'Server configuration error. Please try again later.', success: false, errors: { _form: ['Admin SDK not initialized.'] } };
+    return { 
+        message: 'Firebase Admin SDK failed to initialize. Please check server logs for details.', 
+        success: false, 
+        errors: { _form: ['Critical: Admin SDK initialization failure.'] } 
+    };
   }
 
   let decodedToken;

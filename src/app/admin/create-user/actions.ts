@@ -11,8 +11,8 @@ import * as admin from 'firebase-admin';
 if (admin.apps.length === 0) {
   try {
     admin.initializeApp(); 
-  } catch (e) {
-    console.error('Firebase Admin SDK initialization error in createUserAction:', e);
+  } catch (e: any) {
+    console.error('Firebase Admin SDK initialization error in createUserAction:', e.message);
   }
 }
 
@@ -47,7 +47,11 @@ export async function createUserAction(
   }
 
   if (admin.apps.length === 0) {
-    return { message: 'Admin SDK not initialized. Cannot create user.', success: false, errors: { _form: ['Server configuration error. Please try again later.'] } };
+    return { 
+        message: 'Firebase Admin SDK failed to initialize. Please check server logs for details.', 
+        success: false, 
+        errors: { _form: ['Critical: Admin SDK initialization failure.'] } 
+    };
   }
   
   try {

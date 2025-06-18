@@ -11,8 +11,8 @@ import * as admin from 'firebase-admin';
 if (admin.apps.length === 0) {
   try {
     admin.initializeApp();
-  } catch (e) {
-    console.error('Firebase Admin SDK initialization error in manageUserRoleAction:', e);
+  } catch (e: any) {
+    console.error('Firebase Admin SDK initialization error in manageUserRoleAction:', e.message);
   }
 }
 
@@ -46,7 +46,11 @@ export async function manageUserRoleAction(
   }
 
   if (admin.apps.length === 0) {
-    return { message: 'Server configuration error. Please try again later.', success: false, errors: { _form: ['Admin SDK not initialized.'] } };
+    return { 
+        message: 'Firebase Admin SDK failed to initialize. Please check server logs for details.', 
+        success: false, 
+        errors: { _form: ['Critical: Admin SDK initialization failure.'] } 
+    };
   }
   
   try {
