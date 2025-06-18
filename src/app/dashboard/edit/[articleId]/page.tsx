@@ -1,9 +1,9 @@
 
 'use client';
 
-import { useEffect, useState, useActionState } from 'react'; // Changed
+import { useEffect, useState, useActionState, useTransition } from 'react'; 
 import { useParams, useRouter } from 'next/navigation';
-import { useFormStatus } from 'react-dom'; // useFormStatus is still from react-dom
+import { useFormStatus } from 'react-dom'; 
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -55,6 +55,8 @@ export default function EditDashboardArticlePage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [_isActionPending, startActionTransition] = useTransition();
+
 
   const { control, register, handleSubmit, formState: { errors }, reset, watch, setValue } = useForm<FormValues>({
     resolver: zodResolver(FormSchema),
@@ -67,7 +69,7 @@ export default function EditDashboardArticlePage() {
   });
 
   const initialState: UpdateArticleFormState = { message: '', success: false, errors: {} };
-  const [state, formAction] = useActionState(updateArticleAction, initialState); // Changed
+  const [state, formAction] = useActionState(updateArticleAction, initialState); 
 
   const coverImageFile = watch('coverImage');
 
@@ -160,7 +162,9 @@ export default function EditDashboardArticlePage() {
         formData.append(key, value);
       }
     });
-    formAction(formData);
+    startActionTransition(() => {
+      formAction(formData);
+    });
   };
 
   if (dataLoading) {
@@ -259,5 +263,4 @@ export default function EditDashboardArticlePage() {
     </Card>
   );
 }
-
     

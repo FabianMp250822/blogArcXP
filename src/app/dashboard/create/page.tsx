@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useState, useActionState } from 'react'; 
+import { useEffect, useState, useActionState, useTransition } from 'react'; 
 import { useFormStatus } from 'react-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -61,6 +61,8 @@ export default function CreateDashboardArticlePage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
+  const [_isActionPending, startActionTransition] = useTransition();
+
 
   const { control, register, handleSubmit, formState: { errors }, reset, watch, setValue } = useForm<FormValues>({
     resolver: zodResolver(FormSchema),
@@ -144,13 +146,13 @@ export default function CreateDashboardArticlePage() {
     }
   }, [state, toast, reset]);
   
-  const onSubmit = async (data: FormValues) => { // Make onSubmit async
+  const onSubmit = async (data: FormValues) => { 
     if (!user?.uid) {
       toast({ title: 'Authentication Error', description: 'You must be logged in to create an article.', variant: 'destructive'});
       return;
     }
     try {
-      const idToken = await user.getIdToken(); // Get ID token
+      const idToken = await user.getIdToken(); 
       const formData = new FormData();
       Object.entries(data).forEach(([key, value]) => {
         if (key === 'coverImage' && value instanceof FileList && value.length > 0) {
@@ -163,8 +165,11 @@ export default function CreateDashboardArticlePage() {
           formData.append('newCategoryName', data.newCategoryName);
       }
       formData.append('authorId', user.uid); 
-      formData.append('idToken', idToken); // Add ID token to form data
-      formAction(formData);
+      formData.append('idToken', idToken); 
+      
+      startActionTransition(() => {
+        formAction(formData);
+      });
     } catch (error) {
       console.error("Error getting ID token:", error);
       toast({ title: 'Authentication Error', description: 'Could not verify your session. Please try again.', variant: 'destructive'});

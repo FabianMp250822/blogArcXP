@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useState, useActionState } from 'react'; 
+import { useEffect, useState, useActionState, useTransition } from 'react'; 
 import { useFormStatus } from 'react-dom'; 
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -18,7 +18,7 @@ import type { Category } from '@/types';
 import { Loader2, AlertTriangle, CheckCircle, ListChecks } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { useAuth } from '@/hooks/use-auth'; // Import useAuth
+import { useAuth } from '@/hooks/use-auth'; 
 
 const FormSchema = z.object({
   name: z.string().min(2, 'Category name must be at least 2 characters long.'),
@@ -37,9 +37,11 @@ function SubmitButton() {
 
 export default function ManageCategoriesPage() {
   const { toast } = useToast();
-  const { user } = useAuth(); // Get current admin user
+  const { user } = useAuth(); 
   const [categories, setCategories] = useState<Category[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(true);
+  const [_isActionPending, startActionTransition] = useTransition();
+
 
   const { register, handleSubmit, formState: { errors }, reset } = useForm<FormValues>({
     resolver: zodResolver(FormSchema),
@@ -90,17 +92,20 @@ export default function ManageCategoriesPage() {
     }
   }, [state, toast, reset]); 
   
-  const onSubmit = async (data: FormValues) => { // Make onSubmit async
+  const onSubmit = async (data: FormValues) => { 
     if (!user) {
       toast({ title: 'Authentication Error', description: 'Admin not authenticated.', variant: 'destructive'});
       return;
     }
     try {
-      const idToken = await user.getIdToken(); // Get admin's ID token
+      const idToken = await user.getIdToken(); 
       const formData = new FormData();
       formData.append('name', data.name);
-      formData.append('idToken', idToken); // Add admin's ID token
-      formAction(formData);
+      formData.append('idToken', idToken); 
+      
+      startActionTransition(() => {
+        formAction(formData);
+      });
     } catch (error) {
         console.error("Error getting admin ID token:", error);
         toast({ title: 'Authentication Error', description: 'Could not verify admin session.', variant: 'destructive'});

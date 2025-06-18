@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useState, useActionState } from 'react';
+import { useEffect, useState, useActionState, useTransition } from 'react';
 import { useFormStatus } from 'react-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -19,7 +19,7 @@ import { getAllAuthors, getAllCategories } from '@/lib/firebase/firestore';
 import type { Author, Category } from '@/types';
 import { Loader2, CheckCircle, AlertTriangle, UploadCloud, PlusCircle } from 'lucide-react';
 import Image from 'next/image';
-import { useAuth } from '@/hooks/use-auth'; // Import useAuth
+import { useAuth } from '@/hooks/use-auth'; 
 
 const CREATE_NEW_CATEGORY_VALUE = '__CREATE_NEW__';
 
@@ -59,11 +59,13 @@ function SubmitButton() {
 
 export default function CreateArticlePage() {
   const { toast } = useToast();
-  const { user } = useAuth(); // Get current admin user
+  const { user } = useAuth(); 
   const [authors, setAuthors] = useState<Author[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
+  const [_isActionPending, startActionTransition] = useTransition();
+
 
   const { control, register, handleSubmit, formState: { errors }, reset, watch, setValue } = useForm<FormValues>({
     resolver: zodResolver(FormSchema),
@@ -150,13 +152,13 @@ export default function CreateArticlePage() {
     }
   }, [state, toast, reset]);
   
-  const onSubmit = async (data: FormValues) => { // Make onSubmit async
+  const onSubmit = async (data: FormValues) => { 
     if (!user) {
       toast({ title: 'Authentication Error', description: 'Admin not authenticated.', variant: 'destructive'});
       return;
     }
     try {
-      const idToken = await user.getIdToken(); // Get admin's ID token
+      const idToken = await user.getIdToken(); 
       const formData = new FormData();
       Object.entries(data).forEach(([key, value]) => {
         if (key === 'coverImage' && value instanceof FileList && value.length > 0) {
@@ -168,8 +170,11 @@ export default function CreateArticlePage() {
       if (data.categoryId === CREATE_NEW_CATEGORY_VALUE && data.newCategoryName) {
           formData.append('newCategoryName', data.newCategoryName);
       }
-      formData.append('idToken', idToken); // Add admin's ID token
-      formAction(formData);
+      formData.append('idToken', idToken); 
+      
+      startActionTransition(() => {
+        formAction(formData);
+      });
     } catch (error) {
       console.error("Error getting admin ID token:", error);
       toast({ title: 'Authentication Error', description: 'Could not verify admin session.', variant: 'destructive'});
