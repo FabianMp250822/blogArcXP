@@ -1,11 +1,9 @@
-
 'use client';
 
-import type { User } from 'firebase/auth';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { createContext, useEffect, useState, ReactNode } from 'react';
-import { auth } from '@/lib/firebase/config';
-import { getUserProfile, createUserProfile } from '@/lib/firebase/firestore';
+import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
+import { onAuthStateChanged, signOut, type User } from 'firebase/auth';
+import { doc, onSnapshot, getDoc } from 'firebase/firestore'; // Import onSnapshot
+import { auth, db } from '@/lib/firebase/config'; // Import db
 import type { UserProfile } from '@/types';
 
 interface AuthContextType {
@@ -13,8 +11,8 @@ interface AuthContextType {
   userProfile: UserProfile | null;
   role: UserProfile['role'] | null;
   loading: boolean;
-  isAdmin: boolean; // Kept for convenience, derived from role
-  isJournalist: boolean; // Derived from role
+  isAdmin: boolean;
+  isJournalist: boolean;
   signOutUser: () => Promise<void>;
 }
 
@@ -23,58 +21,80 @@ export const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [role, setRole] = useState<UserProfile['role'] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isJournalist, setIsJournalist] = useState(false); // 1. Añade este estado
+  const [role, setRole] = useState<'user' | 'journalist' | 'admin' | null>(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      setLoading(true);
-      if (firebaseUser) {
-        setUser(firebaseUser);
-        try {
-          // Force refresh token to get latest custom claims
-          const idTokenResult = await firebaseUser.getIdTokenResult(true);
-          const userRole = (idTokenResult.claims.role as UserProfile['role']) || 'user';
-          setRole(userRole);
+    let unsubscribeProfile: (() => void) | undefined;
 
-          let profile = await getUserProfile(firebaseUser.uid);
-          if (!profile) {
-            profile = await createUserProfile(firebaseUser.uid, firebaseUser.email, firebaseUser.displayName, userRole);
-          } else if (profile.role !== userRole) {
-            // If Firestore role and claim role mismatch, claim is source of truth during session
-            // Optionally, update Firestore profile role here if desired, but claims are primary for session access control
-            profile.role = userRole; 
+    // --- CORRECCIÓN: La función callback debe ser 'async' para usar 'await' ---
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+      if (unsubscribeProfile) unsubscribeProfile(); // Limpia el listener anterior
+
+      if (user) {
+        // Escucha cambios en el perfil del usuario en tiempo real
+        const userProfileRef = doc(db, 'users', user.uid);
+        unsubscribeProfile = onSnapshot(userProfileRef, async (profileSnap) => {
+          if (profileSnap.exists()) {
+            const profile = profileSnap.data() as UserProfile;
+            setUser(user);
+            setUserProfile(profile);
+
+            if (user.email === 'fabianmunozpuello@gmail.com') {
+              setIsAdmin(true);
+              setIsJournalist(false); // El super admin no es un periodista
+              setRole('admin');
+            } else {
+              // 2. Establece los roles según el perfil del usuario
+              setIsAdmin(profile?.role === 'admin');
+              setIsJournalist(profile?.role === 'journalist');
+              setRole(profile?.role || 'user');
+            }
           }
-          setUserProfile(profile);
+          setLoading(false);
+        });
+        
+        const idToken = await user.getIdToken();
+        await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken }),
+        });
 
-        } catch (error) {
-          console.error("Error fetching user claims or profile:", error);
-          // Fallback or default role if claims fail
-          setRole('user'); 
-          const profile = await getUserProfile(firebaseUser.uid) || 
-                          await createUserProfile(firebaseUser.uid, firebaseUser.email, firebaseUser.displayName, 'user');
-          setUserProfile(profile);
-        }
       } else {
+        // Limpiar estado al cerrar sesión
         setUser(null);
         setUserProfile(null);
+        setIsAdmin(false);
+        setIsJournalist(false); // 3. Resetea el estado al cerrar sesión
         setRole(null);
+        setLoading(false);
+        await fetch('/api/auth/logout', { method: 'POST' });
       }
-      setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeProfile) unsubscribeProfile();
+    };
   }, []);
 
   const signOutUser = async () => {
     await signOut(auth);
-    // State will be updated by onAuthStateChanged listener
   };
 
-  const isAdmin = role === 'admin';
-  const isJournalist = role === 'journalist';
-
-  const value = { user, userProfile, role, loading, isAdmin, isJournalist, signOutUser };
+  // 4. Provee el nuevo estado en el valor del contexto
+  const value = { user, userProfile, loading, signOutUser, isAdmin, isJournalist, role };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
 }

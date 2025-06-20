@@ -1,13 +1,15 @@
-
 'use client';
 
 import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
+import { Mail, User, Search, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
-import { LogIn, LogOut, User, Mail, Search, Menu, RadioTower, MessageCircle, ShieldCheck, LayoutDashboard } from 'lucide-react';
+import { LogIn, LogOut, RadioTower, MessageCircle, ShieldCheck, LayoutDashboard } from 'lucide-react';
 import { WRadioLogo } from '@/components/icons/w-radio-logo';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import type { SiteSettings } from '@/types'; // <-- 1. Importa el tipo
+import Image from 'next/image'; // <-- 2. Importa el componente Image
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   DropdownMenu,
@@ -21,7 +23,13 @@ import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale'; // Import Spanish locale
 
-export default function Navbar() {
+// 3. Define las props que el componente espera recibir
+interface NavbarProps {
+  siteSettings: SiteSettings;
+}
+
+// 4. Actualiza la firma de la función para aceptar las props
+export default function Navbar({ siteSettings }: NavbarProps) {
   const { user, userProfile, loading, signOutUser, isAdmin, role } = useAuth();
   const router = useRouter();
   const [currentTime, setCurrentTime] = useState<string | null>(null);
@@ -53,18 +61,19 @@ export default function Navbar() {
   return (
     <header className="sticky top-0 z-50 shadow-md">
       {/* Top Yellow Bar */}
-      <div className="bg-primary text-primary-foreground">
-        <div className="container mx-auto px-4 py-1 flex items-center justify-between text-xs">
-          <nav className="flex items-center space-x-3">
+      <div className="bg-[#fec900] text-black text-xs font-semibold">
+        <div className="container mx-auto px-4 h-8 flex justify-between items-center">
+          <nav className="hidden md:flex items-center space-x-4 uppercase">
             {navLinks.map(link => (
-              <Link key={link.label} href={link.href}>
-                <Button variant="link" className="text-inherit hover:text-inherit/80 p-0 h-auto text-xs font-medium tracking-wider">
+              <Button key={link.label} asChild variant="link" className="text-inherit hover:text-inherit/80 p-0 h-auto text-xs font-medium tracking-wider">
+                <Link href={link.href}>
                   {link.label}
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             ))}
           </nav>
-          <div className="flex items-center space-x-3">
+          
+          <div className="flex items-center space-x-4 ml-auto">
             <span className="hidden sm:inline">
               Actualizado {currentTime || <Skeleton className="h-3 w-28 inline-block bg-primary-foreground/20" />}
             </span>
@@ -108,9 +117,15 @@ export default function Navbar() {
                 <User className="h-4 w-4" />
               </Button>
             )}
-            <Button variant="ghost" size="icon" className="h-auto w-auto p-1 text-primary-foreground hover:bg-primary/80 hover:text-primary-foreground">
-              <Mail className="h-4 w-4" />
-            </Button>
+
+            {user && (
+              <Button asChild variant="ghost" size="icon" className="h-auto w-auto p-1 text-primary-foreground hover:bg-primary/80 hover:text-primary-foreground" title="Buzón de mensajes">
+                <Link href="/dashboard/messages">
+                  <Mail className="h-4 w-4" />
+                </Link>
+              </Button>
+            )}
+            
             <Button variant="ghost" size="icon" className="h-auto w-auto p-1 text-primary-foreground hover:bg-primary/80 hover:text-primary-foreground">
               <Search className="h-4 w-4" />
             </Button>
@@ -119,7 +134,7 @@ export default function Navbar() {
       </div>
 
       {/* Main Black Bar */}
-      <div className="bg-navbar-background text-navbar-foreground">
+      <div className="bg-black text-white">
         <div className="container mx-auto px-4 py-2 flex items-center justify-between">
           {/* Left: Hamburger Menu (mobile) / Spacer (desktop) */}
           <div className="w-10"> {/* Occupies space, button inside is visible on mobile */}
@@ -130,8 +145,16 @@ export default function Navbar() {
 
           {/* Center: Logo */}
           <div className="flex-1 flex justify-center">
-            <Link href="/" aria-label="W Radio Home">
-              <WRadioLogo className="h-8 md:h-10 w-auto" />
+            {/* 5. Reemplaza el logo estático por uno dinámico */}
+            <Link href="/" className="flex items-center space-x-3" aria-label={`${siteSettings.siteName} Home`}>
+              <Image 
+                src={siteSettings.logoUrl} 
+                alt={`${siteSettings.siteName} Logo`}
+                width={120} // Ajusta el ancho según tu logo
+                height={40}  // Ajusta la altura según tu logo
+                className="h-8 md:h-10 w-auto"
+                priority
+              />
             </Link>
           </div>
 

@@ -1,11 +1,10 @@
-
 'use client';
 
 import { useAuth } from '@/hooks/use-auth';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { FilePlus, LayoutList, Users, FolderPlus, UserPlus } from 'lucide-react';
+import { FilePlus, LayoutList, Users, FolderPlus, UserPlus, Settings } from 'lucide-react';
 
 export default function AdminPage() {
   const { userProfile } = useAuth();
@@ -28,7 +27,7 @@ export default function AdminPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Link href="/admin/create" passHref legacyBehavior>
+            <Link href="/admin/create">
               <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
                 Create Article
               </Button>
@@ -39,17 +38,17 @@ export default function AdminPage() {
         <Card className="hover:shadow-lg transition-shadow">
           <CardHeader>
             <CardTitle className="flex items-center font-headline">
-             <LayoutList className="mr-2 h-5 w-5 text-primary" /> Manage Articles
+              <LayoutList className="mr-2 h-5 w-5 text-primary" /> Manage Articles
             </CardTitle>
             <CardDescription>
               View, edit, or delete existing articles. (Via Journalist/Admin Dashboard)
             </CardDescription>
           </CardHeader>
           <CardContent>
-             <Link href="/dashboard" passHref legacyBehavior>
-                <Button className="w-full" variant="outline">
+            <Link href="/dashboard">
+              <Button className="w-full" variant="outline">
                 Go to Article Dashboard
-                </Button>
+              </Button>
             </Link>
           </CardContent>
         </Card>
@@ -57,14 +56,14 @@ export default function AdminPage() {
         <Card className="hover:shadow-lg transition-shadow">
           <CardHeader>
             <CardTitle className="flex items-center font-headline">
-             <Users className="mr-2 h-5 w-5 text-primary" /> Manage User Roles
+              <Users className="mr-2 h-5 w-5 text-primary" /> Manage User Roles
             </CardTitle>
             <CardDescription>
               Assign roles to existing users, such as 'journalist' or 'admin'.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Link href="/admin/manage-roles" passHref legacyBehavior>
+            <Link href="/admin/manage-roles">
               <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
                 Manage Roles
               </Button>
@@ -75,14 +74,14 @@ export default function AdminPage() {
         <Card className="hover:shadow-lg transition-shadow">
           <CardHeader>
             <CardTitle className="flex items-center font-headline">
-             <UserPlus className="mr-2 h-5 w-5 text-primary" /> Create New User
+              <UserPlus className="mr-2 h-5 w-5 text-primary" /> Create New User
             </CardTitle>
             <CardDescription>
               Create a new user account, typically for journalists.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Link href="/admin/create-user" passHref legacyBehavior>
+            <Link href="/admin/create-user">
               <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
                 Create User
               </Button>
@@ -93,16 +92,34 @@ export default function AdminPage() {
         <Card className="hover:shadow-lg transition-shadow">
           <CardHeader>
             <CardTitle className="flex items-center font-headline">
-             <FolderPlus className="mr-2 h-5 w-5 text-primary" /> Manage Categories
+              <FolderPlus className="mr-2 h-5 w-5 text-primary" /> Manage Categories
             </CardTitle>
             <CardDescription>
               Create and view article categories.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Link href="/admin/categories" passHref legacyBehavior>
+            <Link href="/admin/categories">
               <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
                 Manage Categories
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-lg transition-shadow">
+          <CardHeader>
+            <CardTitle className="flex items-center font-headline">
+              <Settings className="mr-2 h-5 w-5 text-primary" /> Site Settings
+            </CardTitle>
+            <CardDescription>
+              Change the site name and logo.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/dashboard/settings">
+              <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+                Go to Settings
               </Button>
             </Link>
           </CardContent>

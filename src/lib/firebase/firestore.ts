@@ -1,23 +1,27 @@
-
 import {
-  collection,
-  query,
-  where,
-  orderBy,
-  limit,
-  getDocs,
-  doc,
-  getDoc,
-  addDoc,
-  updateDoc,
-  Timestamp,
-  serverTimestamp,
-  DocumentData,
-  QueryDocumentSnapshot,
-  setDoc, 
+    collection, 
+    getDocs, 
+    addDoc, 
+    serverTimestamp, 
+    query, 
+    where, 
+    doc, 
+    getDoc, 
+    updateDoc,
+    deleteDoc,
+    setDoc,
+    limit,
+    orderBy,
+    Timestamp,
+    type DocumentData,
+    type QueryConstraint, // <-- 1. Importa el tipo QueryConstraint
+    type QueryDocumentSnapshot,
+    arrayUnion,
+    arrayRemove,
+    writeBatch,
 } from 'firebase/firestore';
 import { db } from './config';
-import type { Article, Author, Category, UserProfile } from '@/types';
+import type { Article, Author, Category, UserProfile, SiteSettings, Conversation } from '@/types';
 
 // Helper to convert Firestore doc to Article
 const articleFromDoc = (docSnap: QueryDocumentSnapshot<DocumentData> | DocumentData): Article => {
@@ -56,7 +60,6 @@ async function getAuthorAndCategoryNames(authorId?: string, categoryId?: string)
     return { authorName, categoryName };
 }
 
-
 export async function getPublishedArticles(count: number = 10): Promise<Article[]> {
   const articlesRef = collection(db, 'articles');
   const q = query(
@@ -66,18 +69,17 @@ export async function getPublishedArticles(count: number = 10): Promise<Article[
     limit(count)
   );
   const snapshot = await getDocs(q);
-  const articlesPromises = snapshot.docs.map(async (docSnap) => {
+  return Promise.all(snapshot.docs.map(async (docSnap) => {
     const article = articleFromDoc(docSnap);
     const { authorName, categoryName } = await getAuthorAndCategoryNames(article.authorId, article.categoryId);
     article.authorName = authorName || 'Unknown Author';
     article.categoryName = categoryName || 'Uncategorized';
     return article;
-  });
-  return Promise.all(articlesPromises);
+  }));
 }
 
-export async function getArticleById(articleId: string): Promise<Article | null> {
-  const docRef = doc(db, 'articles', articleId);
+export async function getArticleById(id: string): Promise<Article | null> {
+  const docRef = doc(db, 'articles', id);
   const docSnap = await getDoc(docRef);
   if (!docSnap.exists()) {
     return null;
@@ -122,42 +124,43 @@ export async function getCategoryById(id: string): Promise<Category | null> {
   return { id: docSnap.id, name: data.name, slug: data.slug };
 }
 
-
-export async function getArticlesByCategorySlug(categorySlug: string): Promise<Article[]> {
+// Modifica esta función para aceptar un límite
+export async function getArticlesByCategorySlug(categorySlug: string, count?: number): Promise<Article[]> {
   const category = await getCategoryBySlug(categorySlug);
   if (!category) {
     return [];
   }
   const articlesRef = collection(db, 'articles');
-  const q = query(
-    articlesRef,
+  
+  // 2. Especifica el tipo del array como QueryConstraint[]
+  const constraints: QueryConstraint[] = [
     where('categoryId', '==', category.id),
     where('status', '==', 'published'),
     orderBy('publishedAt', 'desc')
-  );
+  ];
+
+  if (count) {
+    constraints.push(limit(count));
+  }
+
+  const q = query(articlesRef, ...constraints);
+
   const snapshot = await getDocs(q);
-  const articlesPromises = snapshot.docs.map(async (docSnap) => {
+  return Promise.all(snapshot.docs.map(async (docSnap) => {
     const article = articleFromDoc(docSnap);
     const { authorName } = await getAuthorAndCategoryNames(article.authorId);
     article.authorName = authorName || 'Unknown Author';
-    article.categoryName = category.name; // Category name is already known
+    article.categoryName = category.name;
     return article;
-  });
-  return Promise.all(articlesPromises);
+  }));
 }
 
 export async function getAuthorById(authorId: string): Promise<Author | null> {
-  const docRef = doc(db, 'authors', authorId); 
-  const docSnap = await getDoc(docRef);
-  if (!docSnap.exists()) {
-     const userProfile = await getUserProfile(authorId);
-     if (userProfile) {
-       return { id: userProfile.uid, name: userProfile.displayName || userProfile.email || 'Unnamed Author', avatarUrl: userProfile.photoURL || undefined };
-     }
-    return null;
+  const userProfile = await getUserProfile(authorId);
+  if (userProfile) {
+    return { id: userProfile.uid, name: userProfile.displayName || userProfile.email || 'Unnamed Author', avatarUrl: userProfile.photoURL || undefined };
   }
-  const data = docSnap.data();
-  return { id: docSnap.id, name: data.name, avatarUrl: data.avatarUrl };
+  return null;
 }
 
 export async function createFirestoreArticle(articleData: Omit<Article, 'id' | 'createdAt' | 'publishedAt' | 'authorName' | 'categoryName'>): Promise<string> {
@@ -174,30 +177,10 @@ export async function createFirestoreArticle(articleData: Omit<Article, 'id' | '
   return docRef.id;
 }
 
-export async function createArticleFromDashboard(
-  articleData: Omit<Article, 'id' | 'createdAt' | 'publishedAt' | 'authorName' | 'categoryName' | 'slug'>,
-  slug: string
-): Promise<string> {
-  const articlesRef = collection(db, 'articles');
-  const { authorName, categoryName } = await getAuthorAndCategoryNames(articleData.authorId, articleData.categoryId);
-
-  const docRef = await addDoc(articlesRef, {
-    ...articleData,
-    slug,
-    authorName: authorName || 'Unknown Author',
-    categoryName: categoryName || 'Uncategorized',
-    createdAt: serverTimestamp(),
-    publishedAt: articleData.status === 'published' ? serverTimestamp() : null, // Dashboard articles start as draft
-  });
-  return docRef.id;
-}
-
 export async function updateFirestoreArticle(articleId: string, articleUpdateData: Partial<Omit<Article, 'id' | 'createdAt' | 'authorName' | 'categoryName'>>): Promise<void> {
     const articleRef = doc(db, 'articles', articleId);
-    
     const dataToUpdate: Partial<DocumentData> = { ...articleUpdateData };
 
-    // If authorId or categoryId is being updated, fetch their names
     if (articleUpdateData.authorId || articleUpdateData.categoryId) {
         const currentArticleSnap = await getDoc(articleRef);
         const currentArticle = currentArticleSnap.data();
@@ -209,21 +192,15 @@ export async function updateFirestoreArticle(articleId: string, articleUpdateDat
         if (categoryName) dataToUpdate.categoryName = categoryName;
     }
     
-    // Handle publishedAt timestamp if status changes to 'published'
     if (articleUpdateData.status === 'published') {
         const currentArticleSnap = await getDoc(articleRef);
         const currentArticleData = currentArticleSnap.data();
-        // Set publishedAt only if it's not already set or if the status is changing to published
         if (!currentArticleData?.publishedAt || currentArticleData?.status !== 'published') {
             dataToUpdate.publishedAt = serverTimestamp();
         }
     }
-    // If status changes away from 'published', you might want to nullify publishedAt or keep it for history
-    // For now, we only set it when status becomes 'published' for the first time or changes to published.
-
     await updateDoc(articleRef, dataToUpdate);
 }
-
 
 export async function getAllCategories(): Promise<Category[]> {
   const categoriesRef = collection(db, 'categories');
@@ -234,7 +211,6 @@ export async function getAllCategories(): Promise<Category[]> {
 
 export async function createCategory(name: string, slug: string): Promise<string> {
     const categoriesRef = collection(db, 'categories');
-    // Check if category with this slug already exists
     const q = query(categoriesRef, where('slug', '==', slug), limit(1));
     const snapshot = await getDocs(q);
     if (!snapshot.empty) {
@@ -244,11 +220,8 @@ export async function createCategory(name: string, slug: string): Promise<string
     return docRef.id;
 }
 
-
 export async function getAllAuthors(): Promise<Author[]> {
   const usersRef = collection(db, "users");
-  // Example: Fetch all users who are journalists or admins to populate "Author" dropdowns
-  // This could be refined based on how you want to define "Authors" (e.g., all users, or only specific roles)
   const q = query(usersRef, where("role", "in", ["journalist", "admin"]));
   const snapshot = await getDocs(q);
   return snapshot.docs.map(docSnap => {
@@ -256,67 +229,45 @@ export async function getAllAuthors(): Promise<Author[]> {
     return {
       id: docSnap.id,
       name: data.displayName || data.email || 'Unnamed User',
-      avatarUrl: data.photoURL || undefined, // Assuming photoURL might be on UserProfile
+      avatarUrl: data.photoURL || undefined,
     };
   });
 }
 
-
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   const userRef = doc(db, 'users', uid);
   const docSnap = await getDoc(userRef);
-  if (docSnap.exists()) {
-    const data = docSnap.data();
-    return { 
-        uid: docSnap.id, 
-        email: data.email,
-        displayName: data.displayName,
-        role: data.role,
-        photoURL: data.photoURL // Include photoURL if available
-    } as UserProfile;
-  }
-  return null;
-}
 
-export async function getUserProfileByEmail(email: string): Promise<UserProfile | null> {
-  const usersRef = collection(db, 'users');
-  const q = query(usersRef, where('email', '==', email), limit(1));
-  const snapshot = await getDocs(q);
-  if (snapshot.empty) {
+  if (!docSnap.exists()) {
+    console.warn(`No se encontró perfil de usuario para el UID: ${uid}`);
     return null;
   }
-  const docSnap = snapshot.docs[0];
-  const data = docSnap.data();
-  return { 
-    uid: docSnap.id, 
-    email: data.email,
-    displayName: data.displayName,
-    role: data.role,
-    photoURL: data.photoURL
-  } as UserProfile;
+  return docSnap.data() as UserProfile;
 }
-
 
 export async function createUserProfile(uid: string, email: string | null, displayName: string | null, role: UserProfile['role'] = 'user', photoURL?: string | null): Promise<UserProfile> {
   const userRef = doc(db, 'users', uid);
   const newUserProfile: UserProfile = {
     uid,
-    email,
-    displayName,
+    email: email || '',
+    displayName: displayName || '',
     role,
-    photoURL: photoURL || null,
+    photoURL: photoURL || undefined,
   };
   await setDoc(userRef, newUserProfile, { merge: true });
   return newUserProfile;
 }
 
 export async function updateUserProfile(uid: string, data: Partial<Omit<UserProfile, 'uid'>>): Promise<void> {
-  const userRef = doc(db, 'users', uid);
-  await updateDoc(userRef, data);
+    try {
+        const userRef = doc(db, 'users', uid);
+        await updateDoc(userRef, data);
+    } catch (error) {
+        console.error("Error updating user profile: ", error);
+        throw new Error("Failed to update user profile.");
+    }
 }
 
-
-// Dashboard specific functions
 export async function getArticlesByAuthor(authorId: string): Promise<Article[]> {
   const articlesRef = collection(db, 'articles');
   const q = query(
@@ -325,14 +276,13 @@ export async function getArticlesByAuthor(authorId: string): Promise<Article[]> 
     orderBy('createdAt', 'desc')
   );
   const snapshot = await getDocs(q);
-  const articlesPromises = snapshot.docs.map(async (docSnap) => {
+  return Promise.all(snapshot.docs.map(async (docSnap) => {
     const article = articleFromDoc(docSnap);
     const { authorName, categoryName } = await getAuthorAndCategoryNames(article.authorId, article.categoryId);
     article.authorName = authorName || 'Current User'; 
     article.categoryName = categoryName || 'Uncategorized';
     return article;
-  });
-  return Promise.all(articlesPromises);
+  }));
 }
 
 export async function getAllArticlesForAdmin(filterStatus?: Article['status']): Promise<Article[]> {
@@ -344,31 +294,99 @@ export async function getAllArticlesForAdmin(filterStatus?: Article['status']): 
     q = query(articlesRef, orderBy('createdAt', 'desc'));
   }
   const snapshot = await getDocs(q);
-  const articlesPromises = snapshot.docs.map(async (docSnap) => {
+  return Promise.all(snapshot.docs.map(async (docSnap) => {
     const article = articleFromDoc(docSnap);
     const { authorName, categoryName } = await getAuthorAndCategoryNames(article.authorId, article.categoryId);
     article.authorName = authorName || 'Unknown Author';
     article.categoryName = categoryName || 'Uncategorized';
     return article;
-  });
-  return Promise.all(articlesPromises);
+  }));
 }
 
-export async function updateArticleStatus(
-  articleId: string,
-  newStatus: Article['status'],
-): Promise<void> {
+export async function updateArticleStatus(articleId: string, newStatus: Article['status']): Promise<void> {
   const articleRef = doc(db, 'articles', articleId);
-  const updateData: { status: Article['status'], publishedAt?: Timestamp } = { status: newStatus };
+  const updateData: Partial<DocumentData> = { status: newStatus };
   if (newStatus === 'published') {
     const currentArticle = await getArticleById(articleId);
     if (currentArticle && currentArticle.status !== 'published') {
         updateData.publishedAt = serverTimestamp();
-    } else if (currentArticle && currentArticle.publishedAt) {
-        updateData.publishedAt = currentArticle.publishedAt; 
-    } else {
-        updateData.publishedAt = serverTimestamp();
     }
   }
   await updateDoc(articleRef, updateData);
+}
+
+export async function deleteFirestoreArticle(articleId: string): Promise<void> {
+    try {
+        const articleRef = doc(db, 'articles', articleId);
+        await deleteDoc(articleRef);
+    } catch (error) {
+        console.error("Error deleting article from Firestore: ", error);
+        throw new Error("Failed to delete article from database.");
+    }
+}
+
+// --- AÑADE ESTA NUEVA FUNCIÓN ---
+export async function getRelatedArticles(categoryId: string, currentArticleId: string, count: number = 3): Promise<Article[]> {
+  if (!categoryId) {
+    return [];
+  }
+
+  const articlesRef = collection(db, 'articles');
+  const q = query(
+    articlesRef,
+    where('categoryId', '==', categoryId),
+    where('status', '==', 'published'),
+    orderBy('publishedAt', 'desc'),
+    limit(count + 1) // Obtenemos uno extra por si el artículo actual está en los resultados
+  );
+
+  const snapshot = await getDocs(q);
+  
+  // Mapeamos y filtramos para excluir el artículo actual
+  const relatedArticles = snapshot.docs
+    .map(docSnap => articleFromDoc(docSnap))
+    .filter(article => article.id !== currentArticleId);
+
+  // Devolvemos la cantidad deseada de artículos
+  return relatedArticles.slice(0, count);
+}
+
+// --- AÑADE ESTAS DOS NUEVAS FUNCIONES AL FINAL ---
+
+/**
+ * Obtiene la configuración global del sitio desde Firestore.
+ * Proporciona valores predeterminados si no se encuentra la configuración.
+ */
+export async function getSiteSettings(): Promise<SiteSettings> {
+  const settingsRef = doc(db, 'settings', 'siteConfig');
+  const docSnap = await getDoc(settingsRef);
+
+  if (docSnap.exists()) {
+    // Combina los datos guardados con los predeterminados para asegurar que todos los campos existan
+    const data = docSnap.data();
+    return {
+      siteName: data.siteName || 'WRadio',
+      logoUrl: data.logoUrl || '/default-logo.svg',
+      primaryColor: data.primaryColor || '#000000', // Negro por defecto
+      secondaryColor: data.secondaryColor || '#f5a623', // Amarillo/Naranja por defecto
+      fontFamily: data.fontFamily || 'inter',
+    };
+  }
+
+  // Devuelve valores predeterminados si el documento no existe
+  return {
+    siteName: 'WRadio',
+    logoUrl: '/default-logo.svg',
+    primaryColor: '#000000',
+    secondaryColor: '#f5a623',
+    fontFamily: 'inter',
+  };
+}
+
+/**
+ * Actualiza la configuración global del sitio en Firestore.
+ */
+export async function updateSiteSettings(data: Partial<SiteSettings>): Promise<void> {
+  const settingsRef = doc(db, 'settings', 'siteConfig');
+  await setDoc(settingsRef, data, { merge: true });
 }

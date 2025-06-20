@@ -1,25 +1,45 @@
-import { getPublishedArticles } from '@/lib/firebase/firestore';
-import ArticleCard from '@/components/article-card';
+import { getAllCategories, getArticlesByCategorySlug } from '@/lib/firebase/firestore';
+// Quitamos la importación de FeaturedCategorySection que ya no se usa aquí
+import { HeroGridSection } from '@/components/HeroGridSection';
+import { LeadStorySection } from '@/components/LeadStorySection';
 
 export default async function HomePage() {
-  const articles = await getPublishedArticles(10);
+  const allCategories = await getAllCategories();
+
+  // Separamos la categoría "Actualidad"
+  const actualidadCategory = allCategories.find(c => c.slug === 'actualidad');
+  const otherCategories = allCategories.filter(c => c.slug !== 'actualidad');
+
+  // Obtenemos los 3 artículos más recientes para el diseño de portada de "Actualidad"
+  const actualidadArticles = actualidadCategory 
+    ? await getArticlesByCategorySlug(actualidadCategory.slug, 3) 
+    : [];
 
   return (
-    <div className="space-y-12">
-      <section aria-labelledby="latest-articles-heading">
-        <h1 id="latest-articles-heading" className="font-headline text-3xl md:text-4xl font-bold mb-8 text-center text-primary">
-          Latest Articles
-        </h1>
-        {articles.length === 0 ? (
-          <p className="text-center text-muted-foreground">No articles published yet. Check back soon!</p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
-            {articles.map((article) => (
-              <ArticleCard key={article.id} article={article} />
-            ))}
-          </div>
-        )}
-      </section>
-    </div>
+    <main>
+      {/* Sección de Actualidad siempre arriba, ahora con el nuevo diseño */}
+      {actualidadCategory && actualidadArticles.length > 0 && (
+        <HeroGridSection category={actualidadCategory} articles={actualidadArticles} />
+      )}
+
+      {/* Mapeamos las otras categorías y alternamos el diseño */}
+      {otherCategories.map(async (category, index) => {
+        // Para los diseños de grid, 5 artículos funcionan bien
+        const articles = await getArticlesByCategorySlug(category.slug, 5);
+        
+        if (articles.length === 0) {
+          return null;
+        }
+
+        // Alternamos entre los dos diseños de grid
+        // Usamos HeroGridSection para el primer elemento después de actualidad, y luego alternamos
+        if (index % 2 === 0) {
+          return <LeadStorySection key={category.id} category={category} articles={articles} />;
+        } else {
+          // Reutilizamos HeroGridSection para dar variedad
+          return <HeroGridSection key={category.id} category={category} articles={articles} />;
+        }
+      })}
+    </main>
   );
 }

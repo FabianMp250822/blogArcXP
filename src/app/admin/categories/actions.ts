@@ -1,23 +1,9 @@
-
 'use server';
 
 import { z } from 'zod';
 import { createCategory } from '@/lib/firebase/firestore';
 import { revalidatePath } from 'next/cache';
-import * as admin from 'firebase-admin';
-
-let adminSDKError: string | null = null;
-if (admin.apps.length === 0) {
-  try {
-    admin.initializeApp();
-    if (admin.apps.length === 0) {
-        throw new Error("admin.initializeApp() was called but admin.apps is still empty.");
-    }
-  } catch (e: any) {
-    console.error('Firebase Admin SDK initialization error in createCategoryAction:', e);
-    adminSDKError = e.message || "Unknown error during Firebase Admin SDK initialization.";
-  }
-}
+import admin from '@/lib/firebase/admin'; // Importar la instancia centralizada
 
 function generateSlug(name: string): string {
   return name
@@ -48,15 +34,6 @@ export async function createCategoryAction(
   prevState: CreateCategoryFormState,
   formData: FormData
 ): Promise<CreateCategoryFormState> {
-
-  if (admin.apps.length === 0) {
-    const detail = adminSDKError ? `Details: ${adminSDKError}` : "Please check server logs for specific errors.";
-    return {
-        message: `Firebase Admin SDK failed to initialize. ${detail}`,
-        success: false,
-        errors: { _form: [`Critical: Admin SDK initialization failure. ${detail}`] }
-    };
-  }
 
   const idToken = formData.get('idToken') as string;
   if (!idToken) {

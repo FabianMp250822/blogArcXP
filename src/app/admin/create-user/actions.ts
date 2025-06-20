@@ -1,31 +1,19 @@
-
 'use server';
 
 import { z } from 'zod';
+import admin from '@/lib/firebase/admin';
 import { createUserProfile } from '@/lib/firebase/firestore';
-// import { revalidatePath } from 'next/cache'; // Not strictly needed for user creation unless listing users somewhere
-import * as admin from 'firebase-admin';
 
-let adminSDKError: string | null = null;
-if (admin.apps.length === 0) {
-  try {
-    admin.initializeApp();
-    if (admin.apps.length === 0) {
-        throw new Error("admin.initializeApp() was called but admin.apps is still empty.");
-    }
-  } catch (e: any) {
-    console.error('Firebase Admin SDK initialization error in createUserAction:', e);
-    adminSDKError = e.message || "Unknown error during Firebase Admin SDK initialization.";
-  }
-}
-
+// Esquema de validación para el formulario de creación de usuario
 const CreateUserSchema = z.object({
-  email: z.string().email('Invalid email address.'),
-  password: z.string().min(8, 'Password must be at least 8 characters long.'),
+  email: z.string().email('Por favor, introduce un correo electrónico válido.'),
+  password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres.'),
   displayName: z.string().optional(),
-  role: z.enum(['journalist', 'user', 'admin']).default('journalist')
+  role: z.enum(['journalist', 'user', 'admin']).default('journalist'),
+  idToken: z.string().min(1, 'Se requiere token de autenticación del administrador.'),
 });
 
+// Tipado para el estado del formulario que usará useActionState
 export type CreateUserFormState = {
   message: string;
   errors?: {
@@ -34,7 +22,6 @@ export type CreateUserFormState = {
     displayName?: string[];
     role?: string[];
     _form?: string[];
-    idToken?: string[];
   };
   success: boolean;
 };
@@ -43,41 +30,31 @@ export async function createUserAction(
   prevState: CreateUserFormState,
   formData: FormData
 ): Promise<CreateUserFormState> {
-
-  if (admin.apps.length === 0) {
-    const detail = adminSDKError ? `Details: ${adminSDKError}` : "Please check server logs for specific errors.";
-    return {
-        message: `Firebase Admin SDK failed to initialize. ${detail}`,
-        success: false,
-        errors: { _form: [`Critical: Admin SDK initialization failure. ${detail}`] }
-    };
-  }
-
+  
+  // 1. Verificar el token del administrador para asegurar que la acción es legítima
   const idToken = formData.get('idToken') as string;
-  if (!idToken) {
-    return { message: 'Admin authentication token missing.', success: false, errors: { _form: ['Authentication required.'] } };
-  }
-
   try {
     const decodedToken = await admin.auth().verifyIdToken(idToken);
     if (decodedToken.role !== 'admin') {
-      return { message: 'Permission denied. Only admins can create users.', success: false, errors: { _form: ['Unauthorized action.'] } };
+      throw new Error('Permission denied.');
     }
   } catch (error) {
-    console.error("Error verifying admin ID token:", error);
-    return { message: 'Could not verify admin status.', success: false, errors: { _form: ['Admin verification failed.'] } };
+    console.error("Error verificando el token del admin:", error);
+    return { message: 'No tienes permiso para realizar esta acción.', success: false, errors: { _form: ['Verificación de administrador fallida.'] } };
   }
 
+  // 2. Validar los campos del formulario
   const validatedFields = CreateUserSchema.safeParse({
     email: formData.get('email'),
     password: formData.get('password'),
     displayName: formData.get('displayName') || undefined,
     role: formData.get('role') || 'journalist',
+    idToken: idToken,
   });
 
   if (!validatedFields.success) {
     return {
-      message: 'Validation failed. Please check the form fields.',
+      message: 'Validación fallida. Por favor, revisa los campos.',
       errors: validatedFields.error.flatten().fieldErrors,
       success: false,
     };
@@ -85,35 +62,34 @@ export async function createUserAction(
 
   const { email, password, displayName, role } = validatedFields.data;
 
+  // 3. Intentar crear el usuario en Firebase
   try {
+    // Crear usuario en Firebase Authentication
     const userRecord = await admin.auth().createUser({
       email,
       password,
       displayName: displayName || undefined,
     });
     const uid = userRecord.uid;
-    console.log(`Successfully created new user in Auth: ${email} (UID: ${uid})`);
 
+    // Asignar el rol como un custom claim en Firebase Auth
     await admin.auth().setCustomUserClaims(uid, { role });
-    console.log(`Successfully set custom auth claims for ${email} to ${role}.`);
 
+    // Crear el perfil del usuario en la base de datos de Firestore
     await createUserProfile(uid, email, displayName || null, role, userRecord.photoURL);
-    console.log(`Successfully created Firestore profile for ${email} with role ${role}.`);
 
     return {
-        message: `Successfully created user ${email} with role '${role}'.`,
+        message: `Usuario ${email} creado exitosamente con el rol de '${role}'.`,
         success: true
     };
 
   } catch (error: any) {
-    console.error('Error creating user:', error);
-    let errorMessage = 'An unexpected error occurred while creating the user.';
+    console.error('Error creando usuario:', error);
+    let errorMessage = 'Ocurrió un error inesperado al crear el usuario.';
     if (error.code === 'auth/email-already-exists') {
-        errorMessage = 'This email address is already in use by another account.';
+        errorMessage = 'Esta dirección de correo ya está en uso.';
     } else if (error.code === 'auth/invalid-password') {
-        errorMessage = 'Password is too weak or invalid.';
-    } else if (error instanceof Error) {
-        errorMessage = error.message;
+        errorMessage = 'La contraseña es demasiado débil o inválida.';
     }
 
     return {

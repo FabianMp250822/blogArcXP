@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useTransition } from 'react';
@@ -10,7 +9,12 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { FilePlus, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { approveArticleAction, rejectArticleAction, deleteArticleAction } from '@/app/dashboard/actions';
+import { 
+  approveArticleAction, 
+  rejectArticleAction, 
+  deleteArticleAction,
+  updateArticleStatusAction // <-- AÑADE ESTA IMPORTACIÓN
+} from '@/app/dashboard/actions';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AlertDialog,
@@ -72,14 +76,29 @@ export default function AdminDashboard() {
       }
   };
 
+  // Función auxiliar para obtener el token
+  const withAuth = async <T,>(action: (idToken: string) => Promise<T>): Promise<T | null> => {
+    if (!user) {
+      toast({ title: 'Authentication Error', description: 'You must be logged in.', variant: 'destructive' });
+      return null;
+    }
+    try {
+      const idToken = await user.getIdToken();
+      return await action(idToken);
+    } catch (error) {
+      toast({ title: 'Authentication Error', description: 'Could not verify your session.', variant: 'destructive' });
+      return null;
+    }
+  };
+
   const handleApprove = (articleId: string) => {
     setActionLoading(prev => ({ ...prev, [`approve-${articleId}`]: true }));
     startTransition(async () => {
-      const result = await approveArticleAction(articleId);
-      if (result.success) {
+      const result = await withAuth((idToken) => approveArticleAction(articleId, idToken));
+      if (result?.success) {
         toast({ title: 'Success', description: result.message });
         refreshArticles();
-      } else {
+      } else if(result) {
         toast({ title: 'Error', description: result.message, variant: 'destructive' });
       }
       setActionLoading(prev => ({ ...prev, [`approve-${articleId}`]: false }));
@@ -89,17 +108,31 @@ export default function AdminDashboard() {
   const handleReject = (articleId: string) => {
     setActionLoading(prev => ({ ...prev, [`reject-${articleId}`]: true }));
     startTransition(async () => {
-      const result = await rejectArticleAction(articleId);
-      if (result.success) {
+      const result = await withAuth((idToken) => rejectArticleAction(articleId, idToken));
+      if (result?.success) {
         toast({ title: 'Success', description: result.message });
         refreshArticles();
-      } else {
+      } else if(result) {
         toast({ title: 'Error', description: result.message, variant: 'destructive' });
       }
       setActionLoading(prev => ({ ...prev, [`reject-${articleId}`]: false }));
     });
   };
   
+  const handleStatusChange = (articleId: string, newStatus: Article['status']) => {
+    setActionLoading(prev => ({ ...prev, [`status-${articleId}`]: true }));
+    startTransition(async () => {
+      const result = await withAuth((idToken) => updateArticleStatusAction(articleId, newStatus, idToken));
+      if (result?.success) {
+        toast({ title: 'Success', description: result.message });
+        refreshArticles();
+      } else if(result) {
+        toast({ title: 'Error', description: result.message, variant: 'destructive' });
+      }
+      setActionLoading(prev => ({ ...prev, [`status-${articleId}`]: false }));
+    });
+  };
+
   const handleDeleteRequest = (article: Article) => {
     setArticleToDelete(article);
     setShowDeleteDialog(true);
@@ -112,11 +145,11 @@ export default function AdminDashboard() {
     setShowDeleteDialog(false);
 
     startTransition(async () => {
-      const result = await deleteArticleAction(articleId);
-      if (result.success) {
+      const result = await withAuth((idToken) => deleteArticleAction(articleId, idToken));
+      if (result?.success) {
         toast({ title: 'Success', description: result.message });
         refreshArticles();
-      } else {
+      } else if(result) {
         toast({ title: 'Error', description: result.message, variant: 'destructive' });
       }
       setActionLoading(prev => ({ ...prev, [`delete-${articleId}`]: false }));
@@ -180,6 +213,7 @@ export default function AdminDashboard() {
                     caption={`Showing ${currentTab.replace('_', ' ')} articles.`}
                     getActionsForArticle={getActions}
                     isLoading={actionLoading}
+                    onStatusChange={handleStatusChange} // <-- PASA EL MANEJADOR AQUÍ
                 />
             )}
         </TabsContent>
@@ -199,7 +233,7 @@ export default function AdminDashboard() {
             <AlertDialogAction
               onClick={confirmDeleteArticle}
               className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
-              disabled={isPending || (articleToDelete && actionLoading[`delete-${articleToDelete.id}`])}
+              disabled={isPending || (articleToDelete !== null && actionLoading[`delete-${articleToDelete.id}`])}
             >
               {isPending || (articleToDelete && actionLoading[`delete-${articleToDelete.id}`]) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Delete

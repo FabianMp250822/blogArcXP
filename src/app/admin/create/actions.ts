@@ -1,4 +1,3 @@
-
 'use server';
 
 import { z } from 'zod';
@@ -6,22 +5,10 @@ import { createFirestoreArticle, createCategory } from '@/lib/firebase/firestore
 import { uploadFile } from '@/lib/firebase/storage';
 import type { Article } from '@/types';
 import { revalidatePath } from 'next/cache';
-import * as admin from 'firebase-admin';
+import admin from '@/lib/firebase/admin';
+
 
 const CREATE_NEW_CATEGORY_VALUE = '__CREATE_NEW__';
-
-let adminSDKError: string | null = null;
-if (admin.apps.length === 0) {
-  try {
-    admin.initializeApp();
-    if (admin.apps.length === 0) {
-        throw new Error("admin.initializeApp() was called but admin.apps is still empty.");
-    }
-  } catch (e: any) {
-    console.error('Firebase Admin SDK initialization error in createArticleAction (admin):', e);
-    adminSDKError = e.message || "Unknown error during Firebase Admin SDK initialization.";
-  }
-}
 
 function generateSlug(text: string): string {
   return text
@@ -40,8 +27,9 @@ const ArticleSchema = z.object({
   authorId: z.string().min(1, 'Author is required.'),
   categoryId: z.string().min(1, 'Category selection or creation is required.'),
   newCategoryName: z.string().optional(),
-  status: z.enum(['draft', 'published']),
-  coverImage: z.instanceof(File).refine(file => file.size > 0, 'Cover image is required.').refine(file => file.size < 5 * 1024 * 1024, 'Cover image must be less than 5MB.'),
+  coverImage: z.instanceof(File)
+    .refine(file => file.size > 0, 'Cover image is required.')
+    .refine(file => file.size < 5 * 1024 * 1024, 'Cover image must be less than 5MB.'),
   idToken: z.string().min(1, 'Authentication token is required.'),
 }).superRefine((data, ctx) => {
   if (data.categoryId === CREATE_NEW_CATEGORY_VALUE && (!data.newCategoryName || data.newCategoryName.trim().length < 2)) {
@@ -82,12 +70,11 @@ export async function createArticleAction(
   formData: FormData
 ): Promise<CreateArticleFormState> {
 
-  if (admin.apps.length === 0) {
-    const detail = adminSDKError ? `Details: ${adminSDKError}` : "Please check server logs for specific errors.";
+  if (!admin.apps.length) {
     return {
-        message: `Firebase Admin SDK failed to initialize. ${detail}`,
+        message: `Firebase Admin SDK no está inicializado. Revisa los logs del servidor.`,
         success: false,
-        errors: { _form: [`Critical: Admin SDK initialization failure. ${detail}`] }
+        errors: { _form: [`Error crítico de configuración del servidor.`] }
     };
   }
 
@@ -165,6 +152,7 @@ export async function createArticleAction(
       slug,
       coverImageUrl,
       categoryId: finalCategoryId,
+      status: 'pending_review', // <-- AÑADIDO: Establece el estado directamente
     };
 
     await createFirestoreArticle(newArticleData);

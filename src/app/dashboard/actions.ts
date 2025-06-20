@@ -1,47 +1,53 @@
-
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { auth } from '@/lib/firebase/config';
-import { getArticleById, updateArticleStatus, getCategoryById } from '@/lib/firebase/firestore';
-import { deleteDoc, doc } from 'firebase/firestore'; // Import deleteDoc and doc directly
+// Importa el SDK de Admin y quita las importaciones del cliente
+import admin from '@/lib/firebase/admin'; 
+import { getArticleById, updateArticleStatus, getCategoryById, deleteFirestoreArticle } from '@/lib/firebase/firestore';
 import { deleteFileByUrl } from '@/lib/firebase/storage';
 import type { Article } from '@/types';
-import { db } from '@/lib/firebase/config'; // For direct db access for deleteDoc
 
-async function verifyUserRole(allowedRoles: Array<Article['status'] | 'admin' | 'journalist' | 'owner'>, articleId?: string): Promise<{ uid: string; role: string; article?: Article | null }> {
-  const currentUser = auth.currentUser;
-  if (!currentUser) {
-    throw new Error('Authentication required.');
-  }
-
-  const idTokenResult = await currentUser.getIdTokenResult(true);
-  const role = (idTokenResult.claims.role as string) || 'user';
-
-  let article: Article | null = null;
-  if (articleId) {
-    article = await getArticleById(articleId); // This already fetches the article
-    if (!article) {
-        throw new Error('Article not found.');
-    }
-  }
-
-  // Role check
-  let authorized = allowedRoles.includes(role as any);
-
-  // Owner check if 'owner' is allowed and role check failed or wasn't sufficient
-  if (!authorized && articleId && allowedRoles.includes('owner')) {
-    if (article && article.authorId === currentUser.uid) {
-        authorized = true;
-    }
-  }
+// --- REEMPLAZA LA FUNCIÓN ANTERIOR CON ESTA ---
+async function verifyUserAndGetArticle(
+  idToken: string, 
+  allowedRoles: Array<'admin' | 'journalist' | 'owner'>, 
+  articleId: string
+): Promise<{ uid: string; role: string; article: Article }> {
   
-  if (!authorized) {
-    throw new Error(`Permission denied. Required role: ${allowedRoles.join(' or ')} or be the owner.`);
+  if (!idToken) {
+    throw new Error('Authentication token is missing.');
   }
 
-  return { uid: currentUser.uid, role, article };
+  let decodedToken;
+  try {
+    decodedToken = await admin.auth().verifyIdToken(idToken);
+  } catch (error) {
+    throw new Error('Invalid authentication session.');
+  }
+
+  const uid = decodedToken.uid;
+  const role = (decodedToken.role as string) || 'user';
+
+  const article = await getArticleById(articleId);
+  if (!article) {
+    throw new Error('Article not found.');
+  }
+
+  let isAuthorized = allowedRoles.some(r => r === role);
+
+  if (!isAuthorized && allowedRoles.includes('owner')) {
+    if (article.authorId === uid) {
+      isAuthorized = true;
+    }
+  }
+
+  if (!isAuthorized) {
+    throw new Error(`Permission denied. Required role: ${allowedRoles.join(' or ')}.`);
+  }
+
+  return { uid, role, article };
 }
+
 
 export type DashboardActionState = {
   message: string;
@@ -49,19 +55,10 @@ export type DashboardActionState = {
   errors?: Record<string, string[]>;
 };
 
-export async function sendArticleForReviewAction(articleId: string): Promise<DashboardActionState> {
+export async function sendArticleForReviewAction(articleId: string, idToken: string): Promise<DashboardActionState> {
   try {
-    const { uid, article } = await verifyUserRole(['journalist', 'admin', 'owner'], articleId);
+    const { article } = await verifyUserAndGetArticle(idToken, ['journalist', 'admin', 'owner'], articleId);
     
-    if (!article) return { message: 'Article not found.', success: false };
-    // Journalist can only send their own articles for review if they are drafts.
-    // Admin can send any draft article for review.
-    const isOwner = article.authorId === uid;
-    const isAdmin = (await verifyUserRole(['admin'], articleId)).role === 'admin';
-
-    if (!isOwner && !isAdmin) {
-        return { message: 'You do not have permission to send this article for review.', success: false };
-    }
     if (article.status !== 'draft') {
       return { message: 'Article must be in draft status to send for review.', success: false };
     }
@@ -75,10 +72,9 @@ export async function sendArticleForReviewAction(articleId: string): Promise<Das
   }
 }
 
-export async function approveArticleAction(articleId: string): Promise<DashboardActionState> {
+export async function approveArticleAction(articleId: string, idToken: string): Promise<DashboardActionState> {
   try {
-    const { article } = await verifyUserRole(['admin'], articleId);
-    if (!article) return { message: 'Article not found.', success: false };
+    const { article } = await verifyUserAndGetArticle(idToken, ['admin'], articleId);
 
     if (article.status !== 'pending_review') {
       return { message: 'Article must be pending review to be approved.', success: false };
@@ -89,7 +85,7 @@ export async function approveArticleAction(articleId: string): Promise<Dashboard
     revalidatePath('/dashboard');
     revalidatePath('/');
     revalidatePath(`/articles/${article.slug}`);
-    if (article.categoryId) { // Ensure categoryId exists
+    if (article.categoryId) {
         const category = await getCategoryById(article.categoryId);
         if (category) revalidatePath(`/category/${category.slug}`);
     }
@@ -99,11 +95,9 @@ export async function approveArticleAction(articleId: string): Promise<Dashboard
   }
 }
 
-
-export async function rejectArticleAction(articleId: string): Promise<DashboardActionState> {
+export async function rejectArticleAction(articleId: string, idToken: string): Promise<DashboardActionState> {
   try {
-    const { article } = await verifyUserRole(['admin'], articleId);
-    if (!article) return { message: 'Article not found.', success: false };
+    const { article } = await verifyUserAndGetArticle(idToken, ['admin'], articleId);
 
     if (article.status !== 'pending_review') {
       return { message: 'Article must be pending review to be rejected.', success: false };
@@ -118,35 +112,39 @@ export async function rejectArticleAction(articleId: string): Promise<DashboardA
   }
 }
 
-export async function deleteArticleAction(articleId: string): Promise<DashboardActionState> {
+export async function updateArticleStatusAction(articleId: string, newStatus: Article['status'], idToken: string): Promise<DashboardActionState> {
+  try {
+    const { article } = await verifyUserAndGetArticle(idToken, ['admin'], articleId);
+
+    await updateArticleStatus(articleId, newStatus);
+
+    revalidatePath('/dashboard');
+    revalidatePath('/');
+    revalidatePath(`/articles/${article.slug}`);
+    if (article.categoryId) {
+        const category = await getCategoryById(article.categoryId);
+        if (category) revalidatePath(`/category/${category.slug}`);
+    }
+    
+    return { message: `Article status updated to "${newStatus.replace('_', ' ')}"`, success: true };
+  } catch (error: any) {
+    return { message: error.message || 'Failed to update article status.', success: false };
+  }
+}
+
+export async function deleteArticleAction(articleId: string, idToken: string): Promise<DashboardActionState> {
     try {
-        const { article, role, uid } = await verifyUserRole(['admin', 'owner'], articleId);
-        if (!article) {
-            return { message: 'Article not found.', success: false };
-        }
-
-        // Double check permissions (already handled by verifyUserRole, but good for clarity)
-        if (role !== 'admin' && article.authorId !== uid) {
-            return { message: 'You do not have permission to delete this article.', success: false };
-        }
+        const { article } = await verifyUserAndGetArticle(idToken, ['admin', 'owner'], articleId);
         
-        // 1. Delete cover image from Firebase Storage if it exists
         if (article.coverImageUrl) {
-            try {
-                await deleteFileByUrl(article.coverImageUrl);
-            } catch (storageError) {
-                console.warn(`Could not delete cover image ${article.coverImageUrl} for article ${articleId}:`, storageError);
-                // Optionally, decide if this should block the Firestore delete or just log a warning
-            }
+            await deleteFileByUrl(article.coverImageUrl);
         }
 
-        // 2. Delete article document from Firestore
-        const articleRef = doc(db, 'articles', articleId);
-        await deleteDoc(articleRef);
+        await deleteFirestoreArticle(articleId);
         
         revalidatePath('/dashboard');
-        revalidatePath('/'); // Revalidate homepage
-        if (article.slug) revalidatePath(`/articles/${article.slug}`); // Revalidate specific article page if it was published
+        revalidatePath('/');
+        if (article.slug) revalidatePath(`/articles/${article.slug}`);
         if (article.categoryId) {
              const category = await getCategoryById(article.categoryId);
              if (category) revalidatePath(`/category/${category.slug}`);

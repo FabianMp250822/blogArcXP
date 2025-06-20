@@ -1,27 +1,15 @@
-
 'use server';
 
 import { z } from 'zod';
-import { createArticleFromDashboard, createCategory } from '@/lib/firebase/firestore';
+import { revalidatePath } from 'next/cache';
+import admin from '@/lib/firebase/admin';
+// --- CORRECCIÓN: Importa desde los archivos de admin ---
+import { createFirestoreArticle, createCategory } from '@/lib/firebase/firestore-admin';
 import { uploadFile } from '@/lib/firebase/storage';
 import type { Article } from '@/types';
-import { revalidatePath } from 'next/cache';
-import * as admin from 'firebase-admin';
+
 
 const CREATE_NEW_CATEGORY_VALUE = '__CREATE_NEW__';
-
-let adminSDKError: string | null = null;
-if (admin.apps.length === 0) {
-  try {
-    admin.initializeApp();
-    if (admin.apps.length === 0) {
-        throw new Error("admin.initializeApp() was called but admin.apps is still empty.");
-    }
-  } catch (e: any) {
-    console.error('Firebase Admin SDK initialization error in createArticleAction (dashboard):', e);
-    adminSDKError = e.message || "Unknown error during Firebase Admin SDK initialization.";
-  }
-}
 
 function generateSlug(text: string): string {
   return text
@@ -80,12 +68,11 @@ export async function createArticleAction(
   formData: FormData
 ): Promise<CreateDashboardArticleFormState> {
 
-  if (admin.apps.length === 0) {
-    const detail = adminSDKError ? `Details: ${adminSDKError}` : "Please check server logs for specific errors.";
+  if (!admin.apps.length) {
     return {
-        message: `Firebase Admin SDK failed to initialize. ${detail}`,
+        message: `Firebase Admin SDK no está inicializado. Revisa los logs del servidor.`,
         success: false,
-        errors: { _form: [`Critical: Admin SDK initialization failure. ${detail}`] }
+        errors: { _form: [`Error crítico de configuración del servidor.`] }
     };
   }
 
@@ -162,16 +149,20 @@ export async function createArticleAction(
     const coverImageUrl = await uploadFile(coverImage, imagePath);
 
     const newArticleData: Omit<Article, 'id' | 'createdAt' | 'publishedAt' | 'authorName' | 'categoryName' | 'slug'> = {
-      title: articleDataFromSchema.title,
-      excerpt: articleDataFromSchema.excerpt,
-      content: articleDataFromSchema.content,
-      authorId: authenticatedUserUid,
-      status: 'draft',
-      coverImageUrl,
-      categoryId: finalCategoryId,
-    };
+        title, // Use the extracted title variable directly
+        excerpt: validatedFields.data.excerpt,
+        content: validatedFields.data.content,
+        authorId: authenticatedUserUid,
+        status: 'draft',
+        coverImageUrl,
+        categoryId: finalCategoryId,
+      };
 
-    await createArticleFromDashboard(newArticleData, slug);
+    // Llama a la función con el nombre correcto aquí también
+    await createFirestoreArticle({
+      ...newArticleData, // <-- CAMBIADO: Usa la variable correcta
+      slug,
+    });
 
     revalidatePath('/dashboard');
     revalidatePath('/');
