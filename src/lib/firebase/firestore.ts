@@ -91,17 +91,33 @@ export async function getArticleById(id: string): Promise<Article | null> {
   return article;
 }
 
+// --- AÑADE ESTA NUEVA FUNCIÓN ---
+/**
+ * Obtiene un único artículo publicado por su slug.
+ */
 export async function getArticleBySlug(slug: string): Promise<Article | null> {
   const articlesRef = collection(db, 'articles');
-  const q = query(articlesRef, where('slug', '==', slug), limit(1));
+  const q = query(
+    articlesRef,
+    where('slug', '==', slug),
+    where('status', '==', 'published'),
+    limit(1)
+  );
+
   const snapshot = await getDocs(q);
   if (snapshot.empty) {
+    console.warn(`No se encontró ningún artículo publicado con el slug: ${slug}`);
     return null;
   }
-  const article = articleFromDoc(snapshot.docs[0]);
+
+  const docSnap = snapshot.docs[0];
+  const article = articleFromDoc(docSnap);
+
+  // Obtenemos los nombres para mostrarlos en la página
   const { authorName, categoryName } = await getAuthorAndCategoryNames(article.authorId, article.categoryId);
-  article.authorName = authorName;
-  article.categoryName = categoryName;
+  article.authorName = authorName || 'Autor Desconocido';
+  article.categoryName = categoryName || 'Categoría Desconocida';
+
   return article;
 }
 
@@ -126,15 +142,21 @@ export async function getCategoryById(id: string): Promise<Category | null> {
 
 // Modifica esta función para aceptar un límite
 export async function getArticlesByCategorySlug(categorySlug: string, count?: number): Promise<Article[]> {
+  // 1. Encontrar el documento de la categoría usando el slug.
   const category = await getCategoryBySlug(categorySlug);
+  
+  // Si la categoría no existe, no podemos buscar artículos.
   if (!category) {
+    console.warn(`No se encontró ninguna categoría con el slug: ${categorySlug}`);
     return [];
   }
+
   const articlesRef = collection(db, 'articles');
   
-  // 2. Especifica el tipo del array como QueryConstraint[]
   const constraints: QueryConstraint[] = [
-    where('categoryId', '==', category.id),
+    // 2. Usar el ID del documento de la categoría para la consulta.
+    // Esto es mucho más fiable que usar el slug.
+    where('categoryId', '==', category.id), 
     where('status', '==', 'published'),
     orderBy('publishedAt', 'desc')
   ];
@@ -146,11 +168,18 @@ export async function getArticlesByCategorySlug(categorySlug: string, count?: nu
   const q = query(articlesRef, ...constraints);
 
   const snapshot = await getDocs(q);
+  
+  // Si no se encuentran documentos, devolvemos un array vacío.
+  if (snapshot.empty) {
+    return [];
+  }
+
+  // Mapeamos los resultados y añadimos la información del autor/categoría.
   return Promise.all(snapshot.docs.map(async (docSnap) => {
     const article = articleFromDoc(docSnap);
     const { authorName } = await getAuthorAndCategoryNames(article.authorId);
-    article.authorName = authorName || 'Unknown Author';
-    article.categoryName = category.name;
+    article.authorName = authorName || 'Autor Desconocido';
+    article.categoryName = category.name; // Reutilizamos el nombre de la categoría que ya obtuvimos.
     return article;
   }));
 }

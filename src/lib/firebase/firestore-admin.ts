@@ -1,5 +1,5 @@
 import 'server-only'; // Asegura que este módulo solo se use en el servidor
-import admin from './admin';
+import admin from './admin'; // Asegúrate de que admin esté importado
 import type { UserProfile, Conversation, Category, Article, Author } from '@/types';
 import { FieldValue } from 'firebase-admin/firestore';
 
@@ -107,4 +107,68 @@ export async function createCategory(name: string, slug: string): Promise<string
   const categoryRef = db.collection('categories').doc(slug);
   await categoryRef.set({ name, slug });
   return categoryRef.id;
+}
+
+/**
+ * Actualiza una categoría y todos los artículos asociados usando una transacción atómica.
+ * --- CORRECCIÓN: Reorganizado para cumplir con la regla de "lecturas antes de escrituras". ---
+ */
+export async function updateCategory(id: string, newName: string): Promise<void> {
+  await db.runTransaction(async (transaction) => {
+    // --- FASE DE LECTURA ---
+    // Primero, realizamos todas las lecturas necesarias.
+
+    // 1. Leer el documento de la categoría.
+    const categoryRef = db.collection('categories').doc(id);
+    const categoryDoc = await transaction.get(categoryRef);
+
+    if (!categoryDoc.exists) {
+      throw new Error(`La categoría con ID "${id}" no existe.`);
+    }
+    
+    const slug = categoryDoc.data()?.slug;
+    if (!slug) {
+        throw new Error(`La categoría con ID "${id}" no tiene un campo slug.`);
+    }
+
+    // 2. Leer todos los artículos asociados.
+    const articlesQuery = db.collection('articles').where('categoryId', '==', slug);
+    const articlesSnapshot = await transaction.get(articlesQuery);
+
+    // --- FASE DE ESCRITURA ---
+    // Ahora que todas las lecturas están completas, realizamos las escrituras.
+
+    // 3. Escribir la actualización en el documento de la categoría.
+    transaction.update(categoryRef, { name: newName });
+
+    // 4. Escribir la actualización en cada artículo.
+    articlesSnapshot.docs.forEach(articleDoc => {
+      transaction.update(articleDoc.ref, { categoryName: newName });
+    });
+  });
+}
+
+/**
+ * Elimina una categoría y reasigna sus artículos usando una transacción atómica.
+ * Esto garantiza que la operación sea segura y completa.
+ */
+export async function deleteCategoryAndReassignArticles(slug: string): Promise<void> {
+  if (slug === 'general') {
+    throw new Error('No se puede eliminar la categoría "General".');
+  }
+
+  await db.runTransaction(async (transaction) => {
+    // Paso 1: Encontrar los artículos que necesitan ser reasignados.
+    const articlesQuery = db.collection('articles').where('categoryId', '==', slug);
+    const articlesSnapshot = await transaction.get(articlesQuery);
+
+    // Paso 2: Reasignar cada artículo a la categoría "General".
+    articlesSnapshot.docs.forEach(articleDoc => {
+      transaction.update(articleDoc.ref, { categoryId: 'general', categoryName: 'General' });
+    });
+
+    // Paso 3: Eliminar el documento de la categoría.
+    const categoryRef = db.collection('categories').doc(slug);
+    transaction.delete(categoryRef);
+  });
 }

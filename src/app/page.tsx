@@ -1,45 +1,91 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import type { Category, Article } from '@/types';
 import { getAllCategories, getArticlesByCategorySlug } from '@/lib/firebase/firestore';
-// Quitamos la importación de FeaturedCategorySection que ya no se usa aquí
 import { HeroGridSection } from '@/components/HeroGridSection';
-import { LeadStorySection } from '@/components/LeadStorySection';
+import { Loader2 } from 'lucide-react';
 
-export default async function HomePage() {
-  const allCategories = await getAllCategories();
+// Definimos un tipo para la estructura de datos de nuestra página
+interface HomePageData {
+  category: Category;
+  articles: Article[];
+}
 
-  // Separamos la categoría "Actualidad"
-  const actualidadCategory = allCategories.find(c => c.slug === 'actualidad');
-  const otherCategories = allCategories.filter(c => c.slug !== 'actualidad');
+export default function HomePage() {
+  const [homePageData, setHomePageData] = useState<HomePageData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Obtenemos los 3 artículos más recientes para el diseño de portada de "Actualidad"
-  const actualidadArticles = actualidadCategory 
-    ? await getArticlesByCategorySlug(actualidadCategory.slug, 3) 
-    : [];
+  useEffect(() => {
+    // Definimos la función de carga de datos dentro del efecto
+    const fetchHomePageData = async () => {
+      try {
+        // 1. Obtenemos todas las categorías
+        const allCategories = await getAllCategories();
+        
+        // --- ¡AQUÍ ESTÁ LA CORRECCIÓN PARA LA REPETICIÓN! ---
+        // Usamos un Map para eliminar categorías con slugs duplicados.
+        const uniqueCategoriesMap = new Map<string, Category>();
+        allCategories.forEach(category => {
+          if (category && category.slug) {
+            uniqueCategoriesMap.set(category.slug, category);
+          }
+        });
+        const uniqueCategories = Array.from(uniqueCategoriesMap.values());
+        // --- FIN DE LA CORRECCIÓN ---
+
+        // Ahora trabajamos solo con la lista de categorías únicas.
+        const dataPromises = uniqueCategories.map(async (category) => {
+          const articles = await getArticlesByCategorySlug(category.slug, 3);
+          return { category, articles };
+        });
+
+        // 3. Esperamos a que todas las promesas se resuelvan
+        const allData = await Promise.all(dataPromises);
+
+        // 4. Filtramos las secciones que no tienen artículos para no mostrar un título vacío
+        const finalData = allData.filter(item => item.articles.length > 0);
+        
+        // 5. Actualizamos el estado con los datos finales
+        setHomePageData(finalData);
+
+      } catch (err) {
+        console.error("Error al cargar los datos de la página principal:", err);
+        setError("No se pudieron cargar los artículos. Por favor, inténtalo de nuevo más tarde.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchHomePageData();
+
+  // --- ¡ESTA ES LA CORRECCIÓN CLAVE! ---
+  // Un array de dependencias vacío le dice a React que ejecute este efecto
+  // solo una vez, después del primer renderizado. Esto rompe el bucle infinito.
+  }, []); 
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <Loader2 className="h-16 w-16 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex justify-center items-center min-h-screen text-destructive">
+        <p>{error}</p>
+      </div>
+    );
+  }
 
   return (
     <main>
-      {/* Sección de Actualidad siempre arriba, ahora con el nuevo diseño */}
-      {actualidadCategory && actualidadArticles.length > 0 && (
-        <HeroGridSection category={actualidadCategory} articles={actualidadArticles} />
-      )}
-
-      {/* Mapeamos las otras categorías y alternamos el diseño */}
-      {otherCategories.map(async (category, index) => {
-        // Para los diseños de grid, 5 artículos funcionan bien
-        const articles = await getArticlesByCategorySlug(category.slug, 5);
-        
-        if (articles.length === 0) {
-          return null;
-        }
-
-        // Alternamos entre los dos diseños de grid
-        // Usamos HeroGridSection para el primer elemento después de actualidad, y luego alternamos
-        if (index % 2 === 0) {
-          return <LeadStorySection key={category.id} category={category} articles={articles} />;
-        } else {
-          // Reutilizamos HeroGridSection para dar variedad
-          return <HeroGridSection key={category.id} category={category} articles={articles} />;
-        }
-      })}
+      {homePageData.map(({ category, articles }) => (
+        <HeroGridSection key={category.id} category={category} articles={articles} />
+      ))}
     </main>
   );
 }
