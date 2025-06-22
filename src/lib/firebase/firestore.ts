@@ -21,27 +21,35 @@ import {
     writeBatch,
 } from 'firebase/firestore';
 import { db } from './config';
-import type { Article, Author, Category, UserProfile, SiteSettings, Conversation } from '@/types';
+import type { Article, Author, Category, Comment } from '@/types';
 
 // Helper to convert Firestore doc to Article
 const articleFromDoc = (docSnap: QueryDocumentSnapshot<DocumentData> | DocumentData): Article => {
-  const data = docSnap.data();
-  if (!data) throw new Error("Document data is undefined");
+  const data = 'data' in docSnap ? docSnap.data() : docSnap;
+  
+  // Para compatibilidad con artículos antiguos que no tienen un campo 'type'.
+  const type = data.type || data.publicationType;
+
+  // This is a generic way to cast, assuming data in Firestore matches the type structure.
   return {
     id: docSnap.id,
+    // Base fields
     title: data.title,
     slug: data.slug,
-    excerpt: data.excerpt,
-    content: data.content,
-    coverImageUrl: data.coverImageUrl,
     authorId: data.authorId,
     categoryId: data.categoryId,
-    status: data.status as Article['status'],
-    createdAt: data.createdAt as Timestamp,
-    publishedAt: data.publishedAt as Timestamp | undefined,
+    status: data.status,
+    createdAt: data.createdAt,
+    publishedAt: data.publishedAt,
+    // Denormalized fields
     authorName: data.authorName || 'Unknown Author',
     categoryName: data.categoryName || 'Uncategorized',
-  };
+    commentCount: data.commentCount || 0,
+    // Spread all other data to get type-specific fields like content, pdfUrl, etc.
+    ...data,
+    // Asegura que el tipo esté establecido, por defecto 'markdown' para artículos antiguos.
+    type: type || 'markdown',
+  } as Article;
 };
 
 // Helper to get author and category names for an article
@@ -119,6 +127,27 @@ export async function getArticleBySlug(slug: string): Promise<Article | null> {
   article.categoryName = categoryName || 'Categoría Desconocida';
 
   return article;
+}
+
+export async function getCommentsByArticleId(articleId: string): Promise<Comment[]> {
+  if (!articleId) return [];
+  
+  const commentsRef = collection(db, 'comments');
+  const q = query(
+    commentsRef,
+    where('articleId', '==', articleId),
+    orderBy('timestamp', 'asc')
+  );
+
+  const snapshot = await getDocs(q);
+  if (snapshot.empty) {
+    return [];
+  }
+
+  return snapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data(),
+  })) as Comment[];
 }
 
 export async function getCategoryBySlug(slug: string): Promise<Category | null> {

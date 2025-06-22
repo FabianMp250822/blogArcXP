@@ -1,37 +1,27 @@
-
 'use server';
 
 import { z } from 'zod';
-import { updateFirestoreArticle, getArticleById } from '@/lib/firebase/firestore';
-import { uploadFile, deleteFileByUrl } from '@/lib/firebase/storage';
-import type { Article } from '@/types';
 import { revalidatePath } from 'next/cache';
-import { auth as clientAuth } from '@/lib/firebase/config'; // Client SDK for current user
-import * as admin from 'firebase-admin'; // For admin role check server-side if needed, though client token is primary for this action
+import admin from '@/lib/firebase/admin';
+import { updateFirestoreArticle } from '@/lib/firebase/firestore-admin';
+import { uploadFile, deleteFileByUrl } from '@/lib/firebase/storage';
+import { getArticleById } from '@/lib/firebase/firestore';
 
-// Helper to generate a slug from title (if title changes, slug might need to)
-function generateSlug(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/\s+/g, '-') 
-    .replace(/[^\w-]+/g, '') 
-    .replace(/--+/g, '-') 
-    .replace(/^-+/, '') 
-    .replace(/-+$/, ''); 
-}
-
-// Schema for updating an article
-// Cover image is optional during update
 const UpdateArticleSchema = z.object({
   articleId: z.string().min(1, 'Article ID is required.'),
+  idToken: z.string().min(1, 'Authentication token is required.'),
+  publicationType: z.enum(['markdown', 'standard', 'pdf', 'sequence']),
   title: z.string().min(5, 'Title must be at least 5 characters long.'),
-  excerpt: z.string().min(10, 'Excerpt must be at least 10 characters.').max(300, 'Max 300 chars.'),
-  content: z.string().min(50, 'Content must be at least 50 characters long.'),
   categoryId: z.string().min(1, 'Category is required.'),
-  // status: z.enum(['draft', 'pending_review', 'published']), // Status change might be a separate action for admins
-  coverImage: z.instanceof(File).optional() // Optional: only if a new image is uploaded
-    .refine(file => !file || file.size <= 5 * 1024 * 1024, 'Cover image must be less than 5MB.')
-    .refine(file => !file || file.type.startsWith('image/'), 'Only image files are allowed.'),
+  excerpt: z.string().optional(),
+  content: z.string().optional(),
+  coverImage: z.instanceof(File).optional(),
+  pdfFile: z.instanceof(File).optional(),
+  // Para secciones de secuencia
+  sections: z.array(z.object({
+    image: z.instanceof(File).optional(),
+    text: z.string().min(10, 'Text must be at least 10 characters.'),
+  })).optional(),
 });
 
 export type UpdateArticleFormState = {
@@ -42,40 +32,120 @@ export type UpdateArticleFormState = {
     excerpt?: string[];
     content?: string[];
     categoryId?: string[];
-    // status?: string[];
     coverImage?: string[];
+    pdfFile?: string[];
+    sections?: string[];
+    idToken?: string[];
     _form?: string[];
   };
   success: boolean;
-  updatedArticleSlug?: string | null;
+  updatedArticleSlug?: string;
 };
+
+function generateSlug(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^\w-]+/g, '')
+    .replace(/--+/g, '-')
+    .replace(/^-+/, '')
+    .replace(/-+$/, '');
+}
 
 export async function updateArticleAction(
   prevState: UpdateArticleFormState,
   formData: FormData
 ): Promise<UpdateArticleFormState> {
   
-  const currentUser = clientAuth.currentUser;
-  if (!currentUser) {
-    return { message: 'User not authenticated.', success: false, errors: { _form: ['Authentication required.'] } };
+  if (!admin.apps.length) {
+    return {
+      message: 'Firebase Admin SDK not initialized.',
+      success: false,
+      errors: { _form: ['Server configuration error.'] }
+    };
   }
 
+  // Extraer el token de autenticación
+  const idToken = formData.get('idToken') as string;
+  if (!idToken) {
+    return { 
+      message: 'Authentication token missing.', 
+      success: false, 
+      errors: { _form: ['Authentication required.'] } 
+    };
+  }
+
+  // Verificar el token
+  let decodedToken;
+  try {
+    decodedToken = await admin.auth().verifyIdToken(idToken);
+  } catch (error) {
+    console.error("Error verifying ID token:", error);
+    return { 
+      message: 'Invalid authentication session.', 
+      success: false, 
+      errors: { _form: ['Your session is invalid. Please log in again.'] } 
+    };
+  }
+
+  const authenticatedUserUid = decodedToken.uid;
+  const userRole = decodedToken.role as string || 'user';
+
+  // Obtener el artículo existente para verificar permisos
   const articleId = formData.get('articleId') as string;
-  if (!articleId) {
-    return { message: 'Article ID is missing.', success: false, errors: { _form: ['Article ID is required.'] } };
+  const existingArticle = await getArticleById(articleId);
+  
+  if (!existingArticle) {
+    return { 
+      message: 'Article not found.', 
+      success: false, 
+      errors: { _form: ['Article does not exist.'] } 
+    };
   }
 
-  const validatedFields = UpdateArticleSchema.safeParse({
-    articleId: articleId,
+  // Verificar permisos: admin o propietario del artículo
+  if (userRole !== 'admin' && existingArticle.authorId !== authenticatedUserUid) {
+    return { 
+      message: 'Permission denied.', 
+      success: false, 
+      errors: { _form: ['You do not have permission to edit this article.'] } 
+    };
+  }
+
+  // Construir los datos del formulario
+  const rawFormData: any = {
+    articleId,
+    idToken,
+    publicationType: formData.get('publicationType'),
     title: formData.get('title'),
-    excerpt: formData.get('excerpt'),
-    content: formData.get('content'),
     categoryId: formData.get('categoryId'),
-    // status: formData.get('status'), // Status updates are handled by different actions (approve, reject, etc.)
-    coverImage: formData.get('coverImage') instanceof File && (formData.get('coverImage') as File).size > 0 
-                 ? formData.get('coverImage') 
-                 : undefined,
-  });
+  };
+
+  const publicationType = formData.get('publicationType') as string;
+
+  // Agregar campos específicos según el tipo
+  if (publicationType === 'markdown' || publicationType === 'standard') {
+    rawFormData.excerpt = formData.get('excerpt');
+    rawFormData.content = formData.get('content');
+  } else if (publicationType === 'pdf') {
+    rawFormData.pdfFile = formData.get('pdfFile');
+  } else if (publicationType === 'sequence') {
+    const sections = [];
+    let i = 0;
+    while (formData.has(`sections[${i}][text]`)) {
+      sections.push({
+        image: formData.get(`sections[${i}][image]`),
+        text: formData.get(`sections[${i}][text]`),
+      });
+      i++;
+    }
+    rawFormData.sections = sections;
+  }
+
+  rawFormData.coverImage = formData.get('coverImage');
+
+  // Validar los datos
+  const validatedFields = UpdateArticleSchema.safeParse(rawFormData);
 
   if (!validatedFields.success) {
     return {
@@ -85,83 +155,99 @@ export async function updateArticleAction(
     };
   }
 
-  const { coverImage, ...articleUpdateData } = validatedFields.data;
+  const { title, categoryId, coverImage, excerpt, content, pdfFile, sections } = validatedFields.data;
+  const slug = generateSlug(title);
 
   try {
-    // Authorization: Ensure user is owner or admin
-    const articleToUpdate = await getArticleById(articleId);
-    if (!articleToUpdate) {
-      return { message: 'Article not found.', success: false, errors: { _form: ['Article not found.'] } };
-    }
-
-    const idTokenResult = await currentUser.getIdTokenResult(true);
-    const userRole = idTokenResult.claims.role as string;
-    const isAdmin = userRole === 'admin';
-    const isOwner = articleToUpdate.authorId === currentUser.uid;
-
-    if (!isAdmin && !isOwner) {
-      return { message: 'Unauthorized. You do not have permission to edit this article.', success: false, errors: { _form: ['Permission denied.'] } };
-    }
-
-    let newCoverImageUrl = articleToUpdate.coverImageUrl;
-    let newSlug = articleToUpdate.slug;
-
-    // If title changed, regenerate slug
-    if (articleUpdateData.title !== articleToUpdate.title) {
-      newSlug = generateSlug(articleUpdateData.title);
-      // Future enhancement: check for slug uniqueness before updating.
-    }
-
-    // Handle image upload if a new image is provided
-    if (coverImage) {
-      // Delete old image if it exists
-      if (articleToUpdate.coverImageUrl) {
-        try {
-          await deleteFileByUrl(articleToUpdate.coverImageUrl);
-        } catch (storageError) {
-          console.warn(`Could not delete old cover image ${articleToUpdate.coverImageUrl}:`, storageError);
-          // Non-fatal, continue with update
-        }
-      }
-      // Upload new image
-      const imageFileName = `${newSlug}-${Date.now()}-${coverImage.name}`;
-      const imagePath = `articles/${imageFileName}`;
-      newCoverImageUrl = await uploadFile(coverImage, imagePath);
-    }
-
-    const finalUpdateData: Partial<Omit<Article, 'id' | 'createdAt' | 'authorName' | 'categoryName' | 'publishedAt'>> = {
-      ...articleUpdateData,
-      slug: newSlug, // Update slug if title changed
-      coverImageUrl: newCoverImageUrl,
-      // status is not updated here, but taken from existing article, unless admin has specific UI for it.
-      // For simplicity, status is managed by approve/reject actions.
-      // If an admin edits a 'pending_review' article, it should ideally remain 'pending_review' or be explicitly changed by admin.
-      // For now, status of original article is maintained if not directly part of this form.
-      // This update action primarily concerns content, category, title, image.
+    // Preparar los datos de actualización
+    const updateData: any = {
+      title,
+      slug,
+      categoryId,
     };
-    
-    // Ensure authorId is not accidentally changed unless intended (and handled by schema)
-    // finalUpdateData.authorId = articleToUpdate.authorId;
 
-    await updateFirestoreArticle(articleId, finalUpdateData);
+    // Manejar imagen de portada si se proporciona una nueva
+    if (coverImage && coverImage.size > 0) {
+      // Eliminar imagen anterior si existe
+      if ((existingArticle as any).coverImageUrl) {
+        await deleteFileByUrl((existingArticle as any).coverImageUrl);
+      }
+      
+      const imageFileName = `${slug}-${Date.now()}-${coverImage.name}`;
+      const imagePath = `articles/${imageFileName}`;
+      // SUBIR imagen a Storage y guardar solo la URL
+      const coverImageUrl = await uploadFile(coverImage, imagePath);
+      updateData.coverImageUrl = coverImageUrl; // Solo la URL
+    }
 
+    // Campos específicos según el tipo
+    switch (publicationType) {
+      case 'markdown':
+      case 'standard':
+        if (excerpt !== undefined) updateData.excerpt = excerpt;
+        if (content !== undefined) updateData.content = content;
+        break;
+      
+      case 'pdf':
+        if (pdfFile && pdfFile.size > 0) {
+          // Eliminar PDF anterior si existe
+          if ((existingArticle as any).pdfUrl) {
+            await deleteFileByUrl((existingArticle as any).pdfUrl);
+          }
+          
+          const pdfFileName = `${slug}-${Date.now()}-${pdfFile.name}`;
+          const pdfPath = `publications/pdf/${pdfFileName}`;
+          const pdfUrl = await uploadFile(pdfFile, pdfPath);
+          updateData.pdfUrl = pdfUrl;
+        }
+        break;
+      
+      case 'sequence':
+        if (sections && sections.length > 0) {
+          const uploadedSections = await Promise.all(
+            sections.map(async (section, index) => {
+              if (section.image && section.image.size > 0) {
+                const imageFileName = `${slug}-section-${index}-${Date.now()}-${section.image.name}`;
+                const imagePath = `publications/sequence/${imageFileName}`;
+                const imageUrl = await uploadFile(section.image, imagePath);
+                return {
+                  image: imageUrl,
+                  text: section.text,
+                };
+              } else {
+                // Mantener imagen existente si no se proporciona nueva
+                const existingSections = (existingArticle as any).sections || [];
+                return {
+                  image: existingSections[index]?.image || '',
+                  text: section.text,
+                };
+              }
+            })
+          );
+          updateData.sections = uploadedSections;
+        }
+        break;
+    }
+
+    // Actualizar el artículo en Firestore
+    await updateFirestoreArticle(articleId, updateData);
+
+    // Revalidar las rutas relevantes
     revalidatePath('/dashboard');
-    revalidatePath(`/articles/${newSlug}`); // Revalidate with potentially new slug
-    if (articleToUpdate.slug !== newSlug) {
-        revalidatePath(`/articles/${articleToUpdate.slug}`); // Revalidate old slug path too
-    }
-    if (finalUpdateData.categoryId) {
-      revalidatePath(`/category/${finalUpdateData.categoryId}`); // This needs category slug not ID
-    }
+    revalidatePath('/');
+    revalidatePath(`/articles/${slug}`);
 
-
-    return { message: 'Article updated successfully!', success: true, updatedArticleSlug: newSlug };
+    return { 
+      message: 'Article updated successfully!', 
+      success: true,
+      updatedArticleSlug: slug
+    };
 
   } catch (error) {
     console.error('Error updating article:', error);
     let errorMessage = 'An unexpected error occurred while updating the article.';
     if (error instanceof Error) {
-        errorMessage = error.message;
+      errorMessage = error.message;
     }
     return {
       message: errorMessage,

@@ -31,7 +31,8 @@ const ArticleSchema = z.object({
     .refine(file => file.size > 0, 'Cover image is required.')
     .refine(file => file.size < 5 * 1024 * 1024, 'Cover image must be less than 5MB.'),
   idToken: z.string().min(1, 'Authentication token is required.'),
-}).superRefine((data, ctx) => {
+})
+.superRefine((data, ctx) => {
   if (data.categoryId === CREATE_NEW_CATEGORY_VALUE && (!data.newCategoryName || data.newCategoryName.trim().length < 2)) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -144,15 +145,16 @@ export async function createArticleAction(
 
     const imageFileName = `${slug}-${Date.now()}-${coverImage.name}`;
     const imagePath = `articles/${imageFileName}`;
+    // SUBIR imagen a Storage y guardar solo la URL
     const coverImageUrl = await uploadFile(coverImage, imagePath);
 
     const newArticleData: Omit<Article, 'id' | 'createdAt' | 'publishedAt' | 'authorName' | 'categoryName'> = {
       ...articleData,
       title,
       slug,
-      coverImageUrl,
+      coverImageUrl, // Solo la URL, nunca el archivo/base64
       categoryId: finalCategoryId,
-      status: 'pending_review', // <-- AÑADIDO: Establece el estado directamente
+      status: 'pending_review',
     };
 
     await createFirestoreArticle(newArticleData);

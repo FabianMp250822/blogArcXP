@@ -1,9 +1,19 @@
 import 'server-only'; // Asegura que este módulo solo se use en el servidor
 import admin from './admin'; // Asegúrate de que admin esté importado
-import type { UserProfile, Conversation, Category, Article, Author } from '@/types';
+import type { UserProfile, Conversation, Category, Article, Author, Comment } from '@/types';
 import { FieldValue } from 'firebase-admin/firestore';
 
 const db = admin.firestore();
+
+function generateSlug(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^\w-]+/g, '')
+    .replace(/--+/g, '-')
+    .replace(/^-+/, '')
+    .replace(/-+$/, '');
+}
 
 // --- FUNCIONES DE USUARIO Y CONVERSACIÓN ---
 
@@ -91,22 +101,134 @@ export async function getConversationsForUser(userId: string): Promise<Conversat
 
 // --- FUNCIONES DE ARTÍCULOS (VERSIÓN ADMIN) ---
 
-export async function createFirestoreArticle(articleData: Omit<Article, 'id' | 'createdAt' | 'publishedAt' | 'authorName' | 'categoryName'>): Promise<string> {
-  const articlesRef = db.collection('articles');
-  const docRef = await articlesRef.add({
-    ...articleData,
-    createdAt: FieldValue.serverTimestamp(),
-    publishedAt: articleData.status === 'published' ? FieldValue.serverTimestamp() : null,
-  });
-  return docRef.id;
+export async function createFirestoreArticle(articleData: Omit<Article, 'id' | 'createdAt' | 'publishedAt' | 'authorName' | 'categoryName'> & { slug: string }) {
+  if (!admin.apps.length) {
+    throw new Error('Firebase Admin SDK not initialized');
+  }
+
+  const db = admin.firestore();
+  
+  try {
+    const articleRef = db.collection('articles').doc();
+    
+    const newArticle = {
+      ...articleData,
+      id: articleRef.id,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      publishedAt: articleData.status === 'published' ? admin.firestore.FieldValue.serverTimestamp() : null,
+    };
+
+    await articleRef.set(newArticle);
+    
+    return { success: true, articleId: articleRef.id };
+  } catch (error) {
+    console.error('Error creating article:', error);
+    throw error;
+  }
+}
+
+/**
+ * Actualiza un artículo existente en Firestore.
+ * Si se proporciona un nuevo título, también se actualizará el slug.
+ */
+export async function updateFirestoreArticle(articleId: string, updateData: Partial<Article>) {
+  if (!admin.apps.length) {
+    throw new Error('Firebase Admin SDK not initialized');
+  }
+
+  const db = admin.firestore();
+  
+  try {
+    const articleRef = db.collection('articles').doc(articleId);
+    
+    // Verificar que el artículo existe
+    const articleDoc = await articleRef.get();
+    if (!articleDoc.exists) {
+      throw new Error('Article not found');
+    }
+
+    // Agregar timestamp de actualización
+    const updateWithTimestamp = {
+      ...updateData,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    // Si se está actualizando el título, también actualizar el slug
+    if (updateData.title) {
+      updateWithTimestamp.slug = generateSlug(updateData.title);
+    }
+
+    // Si se está cambiando el status a published y no tenía publishedAt, agregarlo
+    if (updateData.status === 'published' && !articleDoc.data()?.publishedAt) {
+      updateWithTimestamp.publishedAt = admin.firestore.FieldValue.serverTimestamp();
+    }
+
+    await articleRef.update(updateWithTimestamp);
+    
+    return { success: true, articleId };
+  } catch (error) {
+    console.error('Error updating article:', error);
+    throw error;
+  }
+}
+
+export async function deleteFirestoreArticle(articleId: string) {
+  if (!admin.apps.length) {
+    throw new Error('Firebase Admin SDK not initialized');
+  }
+
+  const db = admin.firestore();
+  
+  try {
+    const articleRef = db.collection('articles').doc(articleId);
+    
+    // Verificar que el artículo existe
+    const articleDoc = await articleRef.get();
+    if (!articleDoc.exists) {
+      throw new Error('Article not found');
+    }
+
+    await articleRef.delete();
+    
+    return { success: true, articleId };
+  } catch (error) {
+    console.error('Error deleting article:', error);
+    throw error;
+  }
 }
 
 // --- FUNCIONES DE CATEGORÍAS (VERSIÓN ADMIN) ---
 
-export async function createCategory(name: string, slug: string): Promise<string> {
-  const categoryRef = db.collection('categories').doc(slug);
-  await categoryRef.set({ name, slug });
-  return categoryRef.id;
+export async function createCategory(name: string, slug: string) {
+  if (!admin.apps.length) {
+    throw new Error('Firebase Admin SDK not initialized');
+  }
+
+  const db = admin.firestore();
+  
+  try {
+    // Verificar si ya existe una categoría con ese slug
+    const existingCategory = await db.collection('categories').where('slug', '==', slug).get();
+    if (!existingCategory.empty) {
+      throw new Error('A category with this slug already exists');
+    }
+
+    const categoryRef = db.collection('categories').doc();
+    
+    const newCategory = {
+      id: categoryRef.id,
+      name,
+      slug,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    await categoryRef.set(newCategory);
+    
+    return categoryRef.id;
+  } catch (error) {
+    console.error('Error creating category:', error);
+    throw error;
+  }
 }
 
 /**
@@ -170,5 +292,82 @@ export async function deleteCategoryAndReassignArticles(slug: string): Promise<v
     // Paso 3: Eliminar el documento de la categoría.
     const categoryRef = db.collection('categories').doc(slug);
     transaction.delete(categoryRef);
+  });
+}
+
+// --- AÑADE ESTAS NUEVAS FUNCIONES ---
+
+/**
+ * Añade un comentario a un artículo y actualiza el contador.
+ * Se ejecuta en una transacción para garantizar la atomicidad.
+ */
+export async function addCommentToArticle(data: {
+  articleId: string;
+  userId: string;
+  username: string;
+  avatarUrl?: string;
+  text: string;
+  parentId: string | null;
+}): Promise<string> {
+  const articleRef = db.collection('articles').doc(data.articleId);
+  const commentRef = db.collection('comments').doc();
+
+  await db.runTransaction(async (transaction) => {
+    const articleDoc = await transaction.get(articleRef);
+    if (!articleDoc.exists) {
+      throw new Error('El artículo no existe.');
+    }
+
+    // --- FILTRA CAMPOS UNDEFINED PARA FIRESTORE ---
+    const commentData: Record<string, any> = {
+      articleId: data.articleId,
+      userId: data.userId,
+      username: data.username,
+      text: data.text,
+      parentId: data.parentId,
+      timestamp: FieldValue.serverTimestamp(),
+      isDeleted: false,
+      isModerated: false,
+    };
+    if (data.avatarUrl !== undefined) {
+      commentData.avatarUrl = data.avatarUrl;
+    }
+
+    transaction.set(commentRef, commentData);
+
+    transaction.update(articleRef, {
+      commentCount: FieldValue.increment(1),
+    });
+  });
+
+  return commentRef.id;
+}
+
+/**
+ * Elimina lógicamente un comentario y actualiza el contador.
+ */
+export async function deleteCommentFromArticle(commentId: string): Promise<void> {
+  const commentRef = db.collection('comments').doc(commentId);
+  
+  await db.runTransaction(async (transaction) => {
+    const commentDoc = await transaction.get(commentRef);
+    if (!commentDoc.exists) {
+      throw new Error('El comentario no existe.');
+    }
+    
+    const commentData = commentDoc.data() as Comment;
+    const articleRef = db.collection('articles').doc(commentData.articleId);
+
+    // Marca el comentario como eliminado en lugar de borrarlo físicamente
+    transaction.update(commentRef, {
+      text: 'Este comentario ha sido eliminado.',
+      isDeleted: true,
+      userId: null, // Opcional: anonimizar el autor
+    });
+
+    // Decrementa el contador de comentarios en el artículo
+    transaction.update(articleRef, {
+      commentCount: FieldValue.increment(-1),
+    });
   });
 }

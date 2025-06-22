@@ -1,10 +1,9 @@
-
 'use client';
 
 import { useEffect, useState, useActionState, useTransition } from 'react'; 
 import { useParams, useRouter } from 'next/navigation';
 import { useFormStatus } from 'react-dom'; 
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { updateArticleAction, type UpdateArticleFormState } from './actions';
@@ -18,18 +17,61 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { getArticleById, getAllCategories } from '@/lib/firebase/firestore';
 import type { Article, Category } from '@/types';
-import { Loader2, UploadCloud, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Loader2, UploadCloud, AlertTriangle, FileText, Trash2, PlusCircle } from 'lucide-react';
 import Image from 'next/image';
 import { useAuth } from '@/hooks/use-auth';
+import { RichTextEditor } from '@/components/RichTextEditor';
+import { SimpleTextEditor } from '@/components/SimpleTextEditor';
+import { useClientOnly } from '@/hooks/use-client-only';
 
+// --- MODIFICADO: Esquema Zod dinámico para manejar múltiples tipos ---
 const FormSchema = z.object({
+  publicationType: z.enum(['markdown', 'standard', 'pdf', 'sequence']),
   title: z.string().min(5, 'Title must be at least 5 characters long.'),
-  excerpt: z.string().min(10, 'Excerpt must be at least 10 characters.').max(300, 'Max 300 characters.'),
-  content: z.string().min(50, 'Content must be at least 50 characters long.'),
   categoryId: z.string().min(1, 'Category is required.'),
-  coverImage: z.instanceof(FileList).optional() 
-    .refine(files => !files || files.length === 0 || files?.[0]?.size <= 5 * 1024 * 1024, 'Cover image must be less than 5MB.')
-    .refine(files => !files || files.length === 0 || files?.[0]?.type.startsWith('image/'), 'Only image files are allowed.'),
+  
+  // --- CAMBIO: coverImage obligatorio si no hay imagen previa ---
+  coverImage: z.instanceof(FileList).optional()
+    .refine(
+      // Si no hay archivo, se permite solo si ya existe una imagen previa (validación en el submit)
+      files => !files || files.length === 0 || files?.[0]?.size <= 5 * 1024 * 1024,
+      'Cover image must be less than 5MB.'
+    )
+    .refine(
+      files => !files || files.length === 0 || files?.[0]?.type.startsWith('image/'),
+      'Only image files are allowed.'
+    ),
+
+  // Campos para Markdown/Standard
+  excerpt: z.string().optional(),
+  content: z.string().optional(),
+
+  // Campos para PDF
+  pdfFile: z.instanceof(FileList).optional(),
+
+  // Campos para Secuencia
+  sections: z.array(z.object({
+    image: z.instanceof(FileList).optional(),
+    text: z.string().min(10, 'Text must be at least 10 characters.'),
+  })).optional(),
+
+}).superRefine((data, ctx) => {
+  switch (data.publicationType) {
+    case 'markdown':
+    case 'standard':
+      if (!data.excerpt || data.excerpt.length < 10) ctx.addIssue({ code: 'custom', message: 'Excerpt must be at least 10 characters.', path: ['excerpt'] });
+      if (data.excerpt && data.excerpt.length > 300) ctx.addIssue({ code: 'custom', message: 'Max 300 characters.', path: ['excerpt'] });
+      if (!data.content || data.content.length < 50) ctx.addIssue({ code: 'custom', message: 'Content must be at least 50 characters.', path: ['content'] });
+      break;
+    case 'pdf':
+      // Para edición, el PDF no es obligatorio si ya existe
+      break;
+    case 'sequence':
+      if (!data.sections || data.sections.length < 1) {
+        ctx.addIssue({ code: 'custom', message: 'At least one section is required.', path: ['sections'] });
+      }
+      break;
+  }
 });
 
 type FormValues = z.infer<typeof FormSchema>;
@@ -50,6 +92,8 @@ export default function EditDashboardArticlePage() {
   const params = useParams();
   const router = useRouter();
   const articleId = params.articleId as string;
+  const isClient = useClientOnly();
+  const [useSimpleEditor, setUseSimpleEditor] = useState(false);
 
   const [article, setArticle] = useState<Article | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -57,21 +101,28 @@ export default function EditDashboardArticlePage() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [_isActionPending, startActionTransition] = useTransition();
 
-
   const { control, register, handleSubmit, formState: { errors }, reset, watch, setValue } = useForm<FormValues>({
     resolver: zodResolver(FormSchema),
     defaultValues: {
-        title: '',
-        excerpt: '',
-        content: '',
-        categoryId: '',
+      publicationType: 'markdown',
+      title: '',
+      excerpt: '',
+      content: '',
+      categoryId: '',
+      sections: [],
     }
+  });
+
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: "sections"
   });
 
   const initialState: UpdateArticleFormState = { message: '', success: false, errors: {} };
   const [state, formAction] = useActionState(updateArticleAction, initialState); 
 
   const coverImageFile = watch('coverImage');
+  const publicationType = watch('publicationType');
 
   useEffect(() => {
     if (coverImageFile && coverImageFile.length > 0) {
@@ -82,10 +133,9 @@ export default function EditDashboardArticlePage() {
         reader.readAsDataURL(file);
       }
     } else if (article && !coverImageFile?.length) {
-      setImagePreview(article.coverImageUrl || null);
+      setImagePreview((article as any).coverImageUrl || null);
     }
   }, [coverImageFile, article]);
-
 
   useEffect(() => {
     async function fetchData() {
@@ -112,11 +162,22 @@ export default function EditDashboardArticlePage() {
         setArticle(fetchedArticle);
         setCategories(fetchedCategories);
         
+        // Determinar el tipo de publicación
+        const articleType = (fetchedArticle as any).type || (fetchedArticle as any).publicationType || 'markdown';
+        setValue('publicationType', articleType);
         setValue('title', fetchedArticle.title);
-        setValue('excerpt', fetchedArticle.excerpt);
-        setValue('content', fetchedArticle.content);
         setValue('categoryId', fetchedArticle.categoryId);
-        setImagePreview(fetchedArticle.coverImageUrl);
+        
+        // Cargar datos específicos según el tipo
+        if (articleType === 'markdown' || articleType === 'standard') {
+          setValue('excerpt', (fetchedArticle as any).excerpt || '');
+          setValue('content', (fetchedArticle as any).content || '');
+        } else if (articleType === 'sequence') {
+          const sections = (fetchedArticle as any).sections || [];
+          setValue('sections', sections.map((s: any) => ({ text: s.text, image: new DataTransfer().files })));
+        }
+        
+        setImagePreview((fetchedArticle as any).coverImageUrl);
 
       } catch (error) {
         toast({ title: 'Error fetching data', description: 'Could not load article or categories.', variant: 'destructive' });
@@ -134,8 +195,7 @@ export default function EditDashboardArticlePage() {
         title: 'Success!',
         description: state.message,
         variant: 'default',
-        className: 'bg-green-500 text-white',
-        icon: <CheckCircle className="h-5 w-5" />
+        className: 'bg-green-500 text-white'
       });
       if (state.updatedArticleSlug) {
         router.push(`/articles/${state.updatedArticleSlug}`);
@@ -143,28 +203,73 @@ export default function EditDashboardArticlePage() {
         router.push('/dashboard');
       }
     } else if (state.message && !state.success && (state.errors || state.message !== '')) {
-       toast({
+      toast({
         title: 'Error',
         description: state.message || 'Failed to update article. Please check the form.',
-        variant: 'destructive',
-        icon: <AlertTriangle className="h-5 w-5" />,
+        variant: 'destructive'
       });
     }
   }, [state, toast, router]);
 
-  const onSubmit = (data: FormValues) => {
-    const formData = new FormData();
-    formData.append('articleId', articleId);
-    Object.entries(data).forEach(([key, value]) => {
-      if (key === 'coverImage' && value instanceof FileList && value.length > 0) {
-        formData.append(key, value[0]);
-      } else if (typeof value === 'string' && value.trim() !== '') { 
-        formData.append(key, value);
+  const onSubmit = async (data: FormValues) => {
+    if (!user?.uid) {
+      toast({ title: 'Authentication Error', description: 'You must be logged in to edit an article.', variant: 'destructive'});
+      return;
+    }
+
+    // Si no hay imagen previa y no se subió una nueva, error
+    if (
+      (!article || !(article as any).coverImageUrl) &&
+      (!data.coverImage || data.coverImage.length === 0)
+    ) {
+      toast({ title: 'Cover Image Required', description: 'You must upload a cover image.', variant: 'destructive' });
+      return;
+    }
+
+    try {
+      const idToken = await user.getIdToken();
+      const formData = new FormData();
+      
+      formData.append('articleId', articleId);
+      formData.append('publicationType', data.publicationType);
+      formData.append('title', data.title);
+      formData.append('categoryId', data.categoryId);
+      formData.append('idToken', idToken); // <-- Agregar el token
+
+      // Imagen de portada
+      if (data.coverImage && data.coverImage.length > 0) {
+        formData.append('coverImage', data.coverImage[0]);
       }
-    });
-    startActionTransition(() => {
-      formAction(formData);
-    });
+
+      // Campos específicos según el tipo
+      switch (data.publicationType) {
+        case 'markdown':
+        case 'standard':
+          if (data.excerpt) formData.append('excerpt', data.excerpt);
+          if (data.content) formData.append('content', data.content);
+          break;
+        case 'pdf':
+          if (data.pdfFile && data.pdfFile.length > 0) {
+            formData.append('pdfFile', data.pdfFile[0]);
+          }
+          break;
+        case 'sequence':
+          data.sections?.forEach((section, index) => {
+            if (section.image && section.image.length > 0) {
+              formData.append(`sections[${index}][image]`, section.image[0]);
+            }
+            formData.append(`sections[${index}][text]`, section.text);
+          });
+          break;
+      }
+
+      startActionTransition(() => {
+        formAction(formData);
+      });
+    } catch (error) {
+      console.error("Error getting ID token:", error);
+      toast({ title: 'Authentication Error', description: 'Could not verify your session. Please try logging in again.', variant: 'destructive'});
+    }
   };
 
   if (dataLoading) {
@@ -192,22 +297,176 @@ export default function EditDashboardArticlePage() {
           )}
 
           <div>
+            <Label htmlFor="publicationType" className="font-medium">Publication Type</Label>
+            <Controller
+              name="publicationType"
+              control={control}
+              render={({ field }) => (
+                <Select onValueChange={field.onChange} value={field.value} disabled>
+                  <SelectTrigger id="publicationType" className="mt-1">
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="markdown">Markdown Article</SelectItem>
+                    <SelectItem value="standard">Standard Article</SelectItem>
+                    <SelectItem value="pdf">PDF Document</SelectItem>
+                    <SelectItem value="sequence">Image Sequence</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+            />
+            <p className="text-xs text-muted-foreground mt-1">Article type cannot be changed during editing</p>
+          </div>
+
+          <div>
             <Label htmlFor="title" className="font-medium">Title</Label>
             <Input id="title" {...register('title')} aria-invalid={errors.title ? "true" : "false"} className="mt-1"/>
             {errors.title && <p className="text-sm text-destructive mt-1">{errors.title.message}</p>}
           </div>
 
+          {/* Imagen de portada (para todos los tipos) */}
           <div>
-            <Label htmlFor="excerpt" className="font-medium">Excerpt</Label>
-            <Textarea id="excerpt" {...register('excerpt')} aria-invalid={errors.excerpt ? "true" : "false"} className="mt-1" rows={3}/>
-            {errors.excerpt && <p className="text-sm text-destructive mt-1">{errors.excerpt.message}</p>}
+            <Label htmlFor="coverImage" className="font-medium">Cover Image (Optional: leave empty to keep existing)</Label>
+            <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-dashed rounded-md border-input hover:border-primary transition-colors">
+              <div className="space-y-1 text-center">
+                {imagePreview ? (
+                   <div className="relative w-full h-48 mb-2">
+                     <Image src={imagePreview} alt="Cover image preview" fill style={{ objectFit: 'contain' }} />
+                   </div>
+                ) : (
+                  <UploadCloud className="mx-auto h-12 w-12 text-muted-foreground" />
+                )}
+                <div className="flex text-sm text-muted-foreground">
+                  <label
+                    htmlFor="coverImage"
+                    className="relative cursor-pointer rounded-md font-medium text-primary hover:text-accent focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-ring"
+                  >
+                    <span>Upload a new file</span>
+                    <input id="coverImage" type="file" {...register('coverImage')} className="sr-only" accept="image/*" />
+                  </label>
+                  <p className="pl-1">or drag and drop</p>
+                </div>
+                <p className="text-xs text-muted-foreground">PNG, JPG, GIF up to 5MB</p>
+              </div>
+            </div>
+            {errors.coverImage && <p className="text-sm text-destructive mt-1">{errors.coverImage.message as string}</p>}
           </div>
 
-          <div>
-            <Label htmlFor="content" className="font-medium">Content (Markdown)</Label>
-            <Textarea id="content" {...register('content')} aria-invalid={errors.content ? "true" : "false"} className="mt-1" rows={10}/>
-            {errors.content && <p className="text-sm text-destructive mt-1">{errors.content.message}</p>}
-          </div>
+          {/* Campos específicos según el tipo */}
+          {(publicationType === 'markdown' || publicationType === 'standard') && (
+            <>
+              <div>
+                <Label htmlFor="excerpt" className="font-medium">Excerpt</Label>
+                <Textarea id="excerpt" {...register('excerpt')} aria-invalid={errors.excerpt ? "true" : "false"} className="mt-1" rows={3}/>
+                {errors.excerpt && <p className="text-sm text-destructive mt-1">{errors.excerpt.message}</p>}
+              </div>
+
+              <div>
+                <Label htmlFor="content" className="font-medium">Content</Label>
+                {isClient ? (
+                  <>
+                    {!useSimpleEditor ? (
+                      <Controller
+                        name="content"
+                        control={control}
+                        render={({ field }) => (
+                          <div>
+                            <RichTextEditor
+                              value={field.value || ''}
+                              onChange={field.onChange}
+                            />
+                            <Button
+                              type="button"
+                              variant="link"
+                              size="sm"
+                              onClick={() => setUseSimpleEditor(true)}
+                              className="mt-2 text-xs"
+                            >
+                              ¿Problemas con el editor? Cambiar a editor simple
+                            </Button>
+                          </div>
+                        )}
+                      />
+                    ) : (
+                      <Controller
+                        name="content"
+                        control={control}
+                        render={({ field }) => (
+                          <div>
+                            <SimpleTextEditor
+                              value={field.value || ''}
+                              onChange={field.onChange}
+                            />
+                            <Button
+                              type="button"
+                              variant="link"
+                              size="sm"
+                              onClick={() => setUseSimpleEditor(false)}
+                              className="mt-2 text-xs"
+                            >
+                              Cambiar a editor visual
+                            </Button>
+                          </div>
+                        )}
+                      />
+                    )}
+                  </>
+                ) : (
+                  <div className="h-32 bg-muted animate-pulse rounded-md" />
+                )}
+                {errors.content && <p className="text-sm text-destructive mt-1">{errors.content.message}</p>}
+              </div>
+            </>
+          )}
+
+          {publicationType === 'pdf' && (
+            <div>
+              <Label htmlFor="pdfFile" className="font-medium">PDF File (Optional: leave empty to keep existing)</Label>
+              <div className="mt-1 flex justify-center rounded-lg border border-dashed border-input px-6 py-10">
+                <div className="text-center">
+                  <FileText className="mx-auto h-12 w-12 text-gray-400" />
+                  <label htmlFor="pdfFile" className="relative cursor-pointer rounded-md bg-background font-semibold text-primary focus-within:outline-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 hover:text-primary/80">
+                    <span>Upload a new PDF</span>
+                    <input id="pdfFile" {...register('pdfFile')} type="file" className="sr-only" accept="application/pdf" />
+                  </label>
+                  <p className="pl-1">or drag and drop</p>
+                  <p className="text-xs leading-5 text-gray-600">PDF up to 25MB</p>
+                </div>
+              </div>
+              {errors.pdfFile && <p className="text-sm text-destructive mt-1">{errors.pdfFile.message}</p>}
+            </div>
+          )}
+
+          {publicationType === 'sequence' && (
+            <div className="space-y-4">
+              <Label className="font-medium">Story Sections</Label>
+              {fields.map((field, index) => (
+                <div key={field.id} className="flex items-start gap-4 p-4 border rounded-lg relative">
+                   <div className="flex-1 space-y-2">
+                      <Label htmlFor={`sections.${index}.image`}>Section Image</Label>
+                      <Input id={`sections.${index}.image`} {...register(`sections.${index}.image`)} type="file" accept="image/*" />
+                      {errors.sections?.[index]?.image && <p className="text-sm text-destructive mt-1">{errors.sections[index].image?.message}</p>}
+                      
+                      <Label htmlFor={`sections.${index}.text`}>Section Text</Label>
+                      <Textarea id={`sections.${index}.text`} {...register(`sections.${index}.text`)} placeholder="Describe the image or tell part of the story..."/>
+                      {errors.sections?.[index]?.text && <p className="text-sm text-destructive mt-1">{errors.sections[index].text?.message}</p>}
+                   </div>
+                   <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)} className="absolute top-2 right-2">
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                   </Button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => append({ image: new DataTransfer().files, text: '' })}
+                className="w-full"
+              >
+                <PlusCircle className="mr-2 h-4 w-4" /> Add Section
+              </Button>
+              {errors.sections && !Array.isArray(errors.sections) && <p className="text-sm text-destructive mt-1">{errors.sections.message}</p>}
+            </div>
+          )}
           
           <div>
             <Label htmlFor="categoryId" className="font-medium">Category</Label>
@@ -230,37 +489,10 @@ export default function EditDashboardArticlePage() {
             {errors.categoryId && <p className="text-sm text-destructive mt-1">{errors.categoryId.message}</p>}
           </div>
           
-          <div>
-            <Label htmlFor="coverImage" className="font-medium">Cover Image (Optional: leave empty to keep existing)</Label>
-            <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-dashed rounded-md border-input hover:border-primary transition-colors">
-              <div className="space-y-1 text-center">
-                {imagePreview ? (
-                   <div className="relative w-full h-48 mb-2">
-                     <Image src={imagePreview} alt="Cover image preview" layout="fill" objectFit="contain" />
-                   </div>
-                ) : (
-                  <UploadCloud className="mx-auto h-12 w-12 text-muted-foreground" />
-                )}
-                <div className="flex text-sm text-muted-foreground">
-                  <label
-                    htmlFor="coverImage"
-                    className="relative cursor-pointer rounded-md font-medium text-primary hover:text-accent focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-ring"
-                  >
-                    <span>Upload a new file</span>
-                    <input id="coverImage" type="file" {...register('coverImage')} className="sr-only" accept="image/*" />
-                  </label>
-                  <p className="pl-1">or drag and drop</p>
-                </div>
-                <p className="text-xs text-muted-foreground">PNG, JPG, GIF up to 5MB</p>
-              </div>
-            </div>
-            {errors.coverImage && <p className="text-sm text-destructive mt-1">{errors.coverImage.message as string}</p>}
-          </div>
-          
           <SubmitButton />
         </form>
       </CardContent>
     </Card>
   );
 }
-    
+
