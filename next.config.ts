@@ -1,7 +1,6 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  /* config options here */
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -35,6 +34,9 @@ const nextConfig: NextConfig = {
         pathname: '/**',
       },
     ],
+  },
+  serverActions: {
+    bodySizeLimit: 25 * 1024 * 1024, // 25 MB
   },
 };
 
