@@ -1,10 +1,14 @@
-
-/**
- * Firebase Cloud Functions to manage user roles and custom claims.
- */
+/* eslint-disable max-len */
 import * as logger from "firebase-functions/logger";
-import {HttpsError, onCall, onRequest} from "firebase-functions/v2/https";
+import {HttpsError, onCall} from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import * as nodemailer from "nodemailer";
+import * as crypto from "crypto";
+import {
+  onDocumentCreated,
+  FirestoreEvent,
+} from "firebase-functions/v2/firestore";
+import {QueryDocumentSnapshot} from "firebase-admin/firestore";
 
 // Initialize Firebase Admin SDK only once
 if (admin.apps.length === 0) {
@@ -15,7 +19,7 @@ const db = admin.firestore();
 
 interface SetCustomUserClaimsData {
   userId: string;
-  role: "admin" | "journalist" | "user"; // Corrected role type
+  role: "admin" | "journalist" | "user";
 }
 
 interface SetCustomUserClaimsResult {
@@ -24,148 +28,135 @@ interface SetCustomUserClaimsResult {
   error?: string;
 }
 
-/**
- * Callable function to set custom claims for a user.
- * Requires the caller to be an admin.
- */
 export const setCustomUserClaims = onCall<
   SetCustomUserClaimsData,
   Promise<SetCustomUserClaimsResult>
->(
-  async (request) => {
-    logger.info("setCustomUserClaims called with data:", request.data);
+>(async (request) => {
+  logger.info("setCustomUserClaims called with data:", request.data);
 
-    // Check if the caller is authenticated and an admin
-    if (!request.auth || request.auth.token.role !== "admin") {
-      logger.error("Permission denied.", {auth: request.auth});
-      throw new HttpsError(
-        "permission-denied",
-        "You must be an admin to perform this action."
-      );
-    }
-
-    const {userId, role} = request.data;
-
-    if (!userId || !role) {
-      logger.error("Missing userId or role in request data.");
-      throw new HttpsError(
-        "invalid-argument",
-        "The function must be called with 'userId' and 'role' arguments."
-      );
-    }
-
-    const validRoles: Array<SetCustomUserClaimsData["role"]> = [
-      "admin",
-      "journalist",
-      "user",
-    ];
-    if (!validRoles.includes(role)) {
-      logger.error(`Invalid role: ${role}`);
-      throw new HttpsError(
-        "invalid-argument",
-        `Invalid role specified. Must be one of: ${validRoles.join(", ")}.`
-      );
-    }
-
-    try {
-      // Set custom claims in Firebase Auth
-      await admin.auth().setCustomUserClaims(userId, {role});
-      logger.info(
-        `Successfully set custom claims for user ${userId} to ${role}.`
-      );
-
-      // Update role in Firestore user profile, creating it if it doesn't exist
-      const userDocRef = db.collection("users").doc(userId);
-      // eslint-disable-next-line max-len
-      await userDocRef.set({role}, {merge: true}); // Changed from update to set with merge
-      logger.info(
-        `Successfully set/updated Firestore role for user ${userId} to ${role}.`
-      );
-
-      return {
-        success: true,
-        message: `Successfully set role '${role}' for user ${userId}.`,
-      };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
-      logger.error(`Error setting custom claims for user ${userId}:`, error);
-      throw new HttpsError(
-        "internal",
-        `An error occurred: ${error.message || "Unknown error"}`
-      );
-    }
-  }
-);
-
-/**
- * HTTP GET function to assign the 'admin' role to fabianmunozpuello@gmail.com.
- */
-export const setFabianAdminRole = onRequest(async (request, response) => {
-  logger.info("setFabianAdminRole HTTP function triggered.");
-
-  if (request.method !== "GET") {
-    logger.warn(`Method Not Allowed: ${request.method}`);
-    response.status(405).send("Method Not Allowed. Please use GET.");
-    return;
+  if (!request.auth || request.auth.token.role !== "admin") {
+    logger.error("Permission denied.", {auth: request.auth});
+    throw new HttpsError(
+      "permission-denied",
+      "You must be an admin to perform this action."
+    );
   }
 
-  const targetEmail = "fabianmunozpuello@gmail.com";
-  const roleToSet: SetCustomUserClaimsData["role"] = "admin";
+  const {userId, role} = request.data;
+
+  if (!userId || !role) {
+    logger.error("Missing userId or role in request data.");
+    throw new HttpsError(
+      "invalid-argument",
+      "The function must be called with 'userId' and 'role' arguments."
+    );
+  }
+
+  const validRoles: Array<SetCustomUserClaimsData["role"]> = [
+    "admin",
+    "journalist",
+    "user",
+  ];
+  if (!validRoles.includes(role)) {
+    logger.error(`Invalid role: ${role}`);
+    throw new HttpsError(
+      "invalid-argument",
+      `Invalid role specified. Must be one of: ${validRoles.join(", ")}.`
+    );
+  }
 
   try {
-    // Get user by email
-    const userRecord = await admin.auth().getUserByEmail(targetEmail);
-    const userId = userRecord.uid;
-    logger.info(`Found user ${targetEmail} with UID: ${userId}.`);
+    await admin.auth().setCustomUserClaims(userId, {role});
+    logger.info(`Successfully set custom claims for user ${userId} to ${role}.`);
 
-    // Set custom claims
-    await admin.auth().setCustomUserClaims(userId, {role: roleToSet});
-    logger.info(
-      `Successfully set custom claims for user ${targetEmail} to ${roleToSet}.`
-    );
-
-    // Update role in Firestore, creating it if it doesn't exist
-    // eslint-disable-next-line max-len
     const userDocRef = db.collection("users").doc(userId);
-    // eslint-disable-next-line max-len
-    await userDocRef.set({role: roleToSet}, {merge: true}); // Changed from update to set with merge
-    logger.info(
-      // eslint-disable-next-line max-len
-      `Successfully set/updated role for user ${targetEmail} to ${roleToSet} in Firestore.`
+    await userDocRef.set({role}, {merge: true});
+    logger.info(`Successfully set/updated Firestore role for user ${userId} to ${role}.`);
+
+    return {
+      success: true,
+      message: `Successfully set role '${role}' for user ${userId}.`,
+    };
+  } catch (error) {
+    logger.error(`Error setting custom claims for user ${userId}:`, error);
+    throw new HttpsError(
+      "internal",
+      `An error occurred: ${(error as Error).message || "Unknown error"}`
     );
-
-    response.status(200).send(
-      `Successfully assigned role '${roleToSet}' to ${targetEmail}.`
-    );
-  } catch (caughtError: unknown) {
-    logger.error(`Error processing request for ${targetEmail}:`, caughtError);
-
-    let responseMessage = "An error occurred: Unknown error";
-    let errorCode: string | undefined;
-
-    if (typeof caughtError === "object" && caughtError !== null) {
-      // eslint-disable-next-line max-len
-      if ("code"in caughtError && typeof (caughtError as {code: unknown}).code === "string") {
-        errorCode = (caughtError as {code: string}).code;
-      }
-      // eslint-disable-next-line max-len
-      if ("message" in caughtError && typeof (caughtError as {message: unknown}).message === "string") {
-        const errMessage = (caughtError as {message: string}).message;
-        if (errMessage) {
-          responseMessage = `An error occurred: ${errMessage}`;
-        }
-      }
-    } else if (typeof caughtError === "string" && caughtError) {
-      responseMessage = `An error occurred: ${caughtError}`;
-    }
-
-    if (errorCode === "auth/user-not-found") {
-      response.status(404).send(
-        `User with email ${targetEmail} not found.`
-      );
-    } else {
-      response.status(500).send(responseMessage);
-    }
   }
 });
+
+// Configuración del transportador SMTP
+const transporter = nodemailer.createTransport({
+  host: "smtp.hostinger.com",
+  port: 465,
+  secure: true,
+  auth: {
+    user: "validaciones@tecnosalud.cloud",
+    pass: "@V1g@1l250822",
+  },
+});
+
+/**
+ * Genera un token aleatorio para verificación de email.
+ * @return {string} Token generado.
+ */
+function generateToken(): string {
+  return crypto.randomBytes(32).toString("hex");
+}
+
+/**
+ * Envía un correo de verificación al usuario cuando se crea un documento en la colección 'users'.
+ * @param {FirestoreEvent<QueryDocumentSnapshot | undefined, { userId: string }>} event - Evento de Firestore con los datos del usuario.
+ * @returns {Promise<void>} Una promesa que se resuelve cuando el correo ha sido enviado.
+ */
+export const sendVerificationEmail = onDocumentCreated(
+  {document: "users/{userId}"},
+  async (
+    event: FirestoreEvent<QueryDocumentSnapshot | undefined, { userId: string }>
+  ): Promise<void> => {
+    const snap = event.data;
+    if (!snap || !snap.exists) return;
+
+    const user = snap.data();
+    if (!user || !user.email || !user.displayName) return;
+
+    const token = generateToken();
+    await snap.ref.update({
+      emailVerificationToken: token,
+      emailVerified: false,
+    });
+
+    const verifyUrl =
+      `https://surco.vercel.app/verify-email?token=${token}` +
+      `&uid=${event.params.userId}`;
+
+    const html = `
+      <div style="font-family:Arial,sans-serif;max-width:500px;margin:auto;border:1px solid #eee;padding:32px;border-radius:12px;">
+        <h2 style="color:#222;">¡Bienvenido/a, ${user.displayName}!</h2>
+        <p>Gracias por registrarte en nuestro sitio. Para poder comentar y participar,
+        por favor verifica tu correo electrónico haciendo clic en el siguiente botón:</p>
+        <div style="text-align:center;margin:32px 0;">
+          <a href="${verifyUrl}" style="background:#fec900;color:#222;
+          text-decoration:none;padding:14px 32px;border-radius:8px;
+          font-weight:bold;font-size:16px;display:inline-block;">
+            Verificar mi correo
+          </a>
+        </div>
+        <p>Si no creaste esta cuenta, puedes ignorar este mensaje.</p>
+        <hr style="margin:32px 0;">
+        <p style="font-size:12px;color:#888;">
+          Este correo fue enviado automáticamente. No respondas a este mensaje.
+        </p>
+      </div>
+    `;
+
+    await transporter.sendMail({
+      from: "\"Validaciones WRadio\" <validaciones@tecnosalud.cloud>",
+      to: user.email,
+      subject: "Verifica tu correo electrónico",
+      html,
+    });
+  }
+);
 
