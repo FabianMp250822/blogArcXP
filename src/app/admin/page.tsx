@@ -12,24 +12,24 @@ export default function AdminPage() {
   return (
     <div className="space-y-8">
       <header className="mb-8">
-        <h1 className="font-headline text-3xl md:text-4xl font-bold text-primary">Admin Dashboard</h1>
-        <p className="text-muted-foreground">Welcome, {userProfile?.displayName || userProfile?.email || 'Admin'}!</p>
+        <h1 className="font-headline text-3xl md:text-4xl font-bold text-primary">Panel de Administración</h1>
+        <p className="text-muted-foreground">¡Bienvenido, {userProfile?.displayName || userProfile?.email || 'Admin'}!</p>
       </header>
 
       <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <Card className="hover:shadow-lg transition-shadow">
           <CardHeader>
             <CardTitle className="flex items-center font-headline">
-              <FilePlus className="mr-2 h-5 w-5 text-primary" /> Create New Article
+              <FilePlus className="mr-2 h-5 w-5 text-primary" /> Crear Nuevo Artículo
             </CardTitle>
             <CardDescription>
-              Write and publish a new article for your audience.
+              Escribe y publica un nuevo artículo para tu audiencia.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Link href="/admin/create">
               <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
-                Create Article
+                Crear Artículo
               </Button>
             </Link>
           </CardContent>
@@ -38,16 +38,16 @@ export default function AdminPage() {
         <Card className="hover:shadow-lg transition-shadow">
           <CardHeader>
             <CardTitle className="flex items-center font-headline">
-              <LayoutList className="mr-2 h-5 w-5 text-primary" /> Manage Articles
+              <LayoutList className="mr-2 h-5 w-5 text-primary" /> Gestionar Artículos
             </CardTitle>
             <CardDescription>
-              View, edit, or delete existing articles. (Via Journalist/Admin Dashboard)
+              Ver, editar o eliminar artículos existentes. (Vía Panel de Periodista/Admin)
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Link href="/dashboard">
               <Button className="w-full" variant="outline">
-                Go to Article Dashboard
+                Ir al Panel de Artículos
               </Button>
             </Link>
           </CardContent>
@@ -56,16 +56,16 @@ export default function AdminPage() {
         <Card className="hover:shadow-lg transition-shadow">
           <CardHeader>
             <CardTitle className="flex items-center font-headline">
-              <Users className="mr-2 h-5 w-5 text-primary" /> Manage User Roles
+              <Users className="mr-2 h-5 w-5 text-primary" /> Gestionar Roles de Usuario
             </CardTitle>
             <CardDescription>
-              Assign roles to existing users, such as 'journalist' or 'admin'.
+              Asigna roles a usuarios existentes, como 'periodista' o 'admin'.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Link href="/admin/manage-roles">
               <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
-                Manage Roles
+                Gestionar Roles
               </Button>
             </Link>
           </CardContent>
@@ -74,16 +74,16 @@ export default function AdminPage() {
         <Card className="hover:shadow-lg transition-shadow">
           <CardHeader>
             <CardTitle className="flex items-center font-headline">
-              <UserPlus className="mr-2 h-5 w-5 text-primary" /> Create New User
+              <UserPlus className="mr-2 h-5 w-5 text-primary" /> Crear Nuevo Usuario
             </CardTitle>
             <CardDescription>
-              Create a new user account, typically for journalists.
+              Crea una nueva cuenta de usuario, normalmente para periodistas.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Link href="/admin/create-user">
               <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
-                Create User
+                Crear Usuario
               </Button>
             </Link>
           </CardContent>
@@ -92,16 +92,16 @@ export default function AdminPage() {
         <Card className="hover:shadow-lg transition-shadow">
           <CardHeader>
             <CardTitle className="flex items-center font-headline">
-              <FolderPlus className="mr-2 h-5 w-5 text-primary" /> Manage Categories
+              <FolderPlus className="mr-2 h-5 w-5 text-primary" /> Gestionar Categorías
             </CardTitle>
             <CardDescription>
-              Create and view article categories.
+              Crea y visualiza categorías de artículos.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Link href="/admin/categories">
               <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
-                Manage Categories
+                Gestionar Categorías
               </Button>
             </Link>
           </CardContent>
@@ -110,16 +110,16 @@ export default function AdminPage() {
         <Card className="hover:shadow-lg transition-shadow">
           <CardHeader>
             <CardTitle className="flex items-center font-headline">
-              <Settings className="mr-2 h-5 w-5 text-primary" /> Site Settings
+              <Settings className="mr-2 h-5 w-5 text-primary" /> Configuración del Sitio
             </CardTitle>
             <CardDescription>
-              Change the site name and logo.
+              Cambia el nombre y logo del sitio.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Link href="/dashboard/settings">
               <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
-                Go to Settings
+                Ir a Configuración
               </Button>
             </Link>
           </CardContent>

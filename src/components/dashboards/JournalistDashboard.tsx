@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useTransition } from 'react';
@@ -129,39 +128,42 @@ export default function JournalistDashboard() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-headline text-primary">My Articles</h1>
-          <p className="text-muted-foreground">Manage your created articles, {userProfile?.displayName || user?.email}.</p>
+          <h1 className="text-3xl font-headline text-primary">Mis Artículos</h1>
+          <p className="text-muted-foreground">Administra tus artículos creados, {userProfile?.displayName || user?.email}.</p>
         </div>
         <Link href="/dashboard/create" passHref legacyBehavior>
           <Button className="bg-accent hover:bg-accent/80 text-accent-foreground">
-            <FilePlus className="mr-2 h-5 w-5" /> Create New Article
+            <FilePlus className="mr-2 h-5 w-5" /> Crear Nuevo Artículo
           </Button>
         </Link>
       </div>
       <ArticleTable
-        articles={articles}
-        caption="Your articles will appear here."
+        articles={articles.map(article => ({
+          ...article,
+          authorName: article.authorName === 'Unnamed Author' ? 'Dr. Robinson Rada Gonzalez' : article.authorName
+        }))}
+        caption="Tus artículos aparecerán aquí."
         getActionsForArticle={getActions}
         isLoading={actionLoading}
       />
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the article
-              "{articleToDelete?.title}" and its associated files.
+              Esta acción no se puede deshacer. Esto eliminará permanentemente el artículo
+              "{articleToDelete?.title}" y sus archivos asociados.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setArticleToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setArticleToDelete(null)}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDeleteArticle}
               className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
               disabled={isPending || (articleToDelete && actionLoading[`delete-${articleToDelete.id}`])}
             >
               {isPending || (articleToDelete && actionLoading[`delete-${articleToDelete.id}`]) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Delete
+              Eliminar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

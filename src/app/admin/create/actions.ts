@@ -21,29 +21,29 @@ function generateSlug(text: string): string {
 }
 
 const ArticleSchema = z.object({
-  title: z.string().min(5, 'Title must be at least 5 characters long.'),
-  excerpt: z.string().min(10, 'Excerpt must be at least 10 characters long.').max(300, 'Excerpt must be at most 300 characters long.'),
-  content: z.string().min(50, 'Content must be at least 50 characters long.'),
-  authorId: z.string().min(1, 'Author is required.'),
-  categoryId: z.string().min(1, 'Category selection or creation is required.'),
+  title: z.string().min(5, 'El título debe tener al menos 5 caracteres.'),
+  excerpt: z.string().min(10, 'El extracto debe tener al menos 10 caracteres.').max(300, 'El extracto debe tener como máximo 300 caracteres.'),
+  content: z.string().min(50, 'El contenido debe tener al menos 50 caracteres.'),
+  authorId: z.string().min(1, 'El autor es obligatorio.'),
+  categoryId: z.string().min(1, 'Seleccionar o crear una categoría es obligatorio.'),
   newCategoryName: z.string().optional(),
   coverImage: z.instanceof(File)
-    .refine(file => file.size > 0, 'Cover image is required.')
-    .refine(file => file.size < 5 * 1024 * 1024, 'Cover image must be less than 5MB.'),
-  idToken: z.string().min(1, 'Authentication token is required.'),
+    .refine(file => file.size > 0, 'La imagen de portada es obligatoria.')
+    .refine(file => file.size < 5 * 1024 * 1024, 'La imagen de portada debe ser menor a 5MB.'),
+  idToken: z.string().min(1, 'El token de autenticación es obligatorio.'),
 })
 .superRefine((data, ctx) => {
   if (data.categoryId === CREATE_NEW_CATEGORY_VALUE && (!data.newCategoryName || data.newCategoryName.trim().length < 2)) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: 'New category name must be at least 2 characters.',
+      message: 'El nombre de la nueva categoría debe tener al menos 2 caracteres.',
       path: ['newCategoryName'],
     });
   }
   if (data.categoryId !== CREATE_NEW_CATEGORY_VALUE && data.newCategoryName && data.newCategoryName.trim().length > 0) {
      ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: 'New category name should only be provided when "Create new category..." is selected.',
+      message: 'El nombre de la nueva categoría solo debe proporcionarse cuando se selecciona "Crear nueva categoría...".',
       path: ['newCategoryName'],
     });
   }
@@ -73,7 +73,7 @@ export async function createArticleAction(
 
   if (!admin.apps.length) {
     return {
-        message: `Firebase Admin SDK no está inicializado. Revisa los logs del servidor.`,
+        message: `El SDK de Firebase Admin no está inicializado. Revisa los logs del servidor.`,
         success: false,
         errors: { _form: [`Error crítico de configuración del servidor.`] }
     };
@@ -81,17 +81,17 @@ export async function createArticleAction(
 
   const idToken = formData.get('idToken') as string;
   if (!idToken) {
-    return { message: 'Admin authentication token missing.', success: false, errors: { _form: ['Authentication required.'] } };
+    return { message: 'Falta el token de autenticación del administrador.', success: false, errors: { _form: ['Autenticación requerida.'] } };
   }
 
   try {
     const decodedToken = await admin.auth().verifyIdToken(idToken);
     if (decodedToken.role !== 'admin') {
-      return { message: 'Permission denied. Only admins can create articles here.', success: false, errors: { _form: ['Unauthorized action.'] } };
+      return { message: 'Permiso denegado. Solo los administradores pueden crear artículos aquí.', success: false, errors: { _form: ['Acción no autorizada.'] } };
     }
   } catch (error) {
-    console.error("Error verifying admin ID token:", error);
-    return { message: 'Could not verify admin status.', success: false, errors: { _form: ['Admin verification failed.'] } };
+    console.error("Error verificando el token de administrador:", error);
+    return { message: 'No se pudo verificar el estado de administrador.', success: false, errors: { _form: ['Falló la verificación de administrador.'] } };
   }
 
   const rawFormData = {
@@ -110,7 +110,7 @@ export async function createArticleAction(
 
   if (!validatedFields.success) {
     return {
-      message: 'Validation failed. Please check the form fields.',
+      message: 'Validación fallida. Por favor revisa los campos del formulario.',
       errors: validatedFields.error.flatten().fieldErrors,
       success: false,
     };
@@ -130,15 +130,15 @@ export async function createArticleAction(
             revalidatePath('/dashboard/create');
         } catch (categoryError: any) {
             return {
-                message: `Failed to create new category: ${categoryError.message}`,
-                errors: { newCategoryName: [categoryError.message], _form: [`Failed to create new category: ${categoryError.message}`] },
+                message: `No se pudo crear la nueva categoría: ${categoryError.message}`,
+                errors: { newCategoryName: [categoryError.message], _form: [`No se pudo crear la nueva categoría: ${categoryError.message}`] },
                 success: false,
             };
         }
     } else if (selectedCategoryId === CREATE_NEW_CATEGORY_VALUE && !newCategoryName) {
          return {
-            message: 'New category name is required when "Create new category..." is selected.',
-            errors: { newCategoryName: ['New category name is required.'] },
+            message: 'El nombre de la nueva categoría es obligatorio cuando se selecciona "Crear nueva categoría...".',
+            errors: { newCategoryName: ['El nombre de la nueva categoría es obligatorio.'] },
             success: false,
          };
     }
@@ -163,11 +163,11 @@ export async function createArticleAction(
     revalidatePath(`/articles/${slug}`);
     revalidatePath('/dashboard');
 
-    return { message: 'Article created successfully!', success: true };
+    return { message: '¡Artículo creado exitosamente!', success: true };
 
   } catch (error) {
-    console.error('Error creating article:', error);
-    let errorMessage = 'An unexpected error occurred.';
+    console.error('Error creando el artículo:', error);
+    let errorMessage = 'Ocurrió un error inesperado.';
     if (error instanceof Error) {
         errorMessage = error.message;
     }

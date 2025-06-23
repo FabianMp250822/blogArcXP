@@ -130,25 +130,25 @@ export default function ManageCategoriesPage() {
     <div className="grid md:grid-cols-2 gap-8 items-start p-4">
       <Card className="w-full shadow-lg">
         <CardHeader>
-          <CardTitle className="text-2xl font-bold">Create New Category</CardTitle>
-          <CardDescription>Add a new category for organizing articles.</CardDescription>
+          <CardTitle className="text-2xl font-bold">Crear Nueva Categoría</CardTitle>
+          <CardDescription>Agrega una nueva categoría para organizar los artículos.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onCreateSubmit)} className="space-y-4">
             <div>
-              <Label htmlFor="name">Category Name</Label>
-              <Input id="name" {...register('name')} placeholder="e.g., Technology, Sports" />
+              <Label htmlFor="name">Nombre de la Categoría</Label>
+              <Input id="name" {...register('name')} placeholder="Ej: Tecnología, Deportes" />
               {errors.name && <p className="text-sm text-destructive mt-1">{errors.name.message}</p>}
             </div>
-            <SubmitButton text="Create Category" pendingText="Creating..." />
+            <SubmitButton text="Crear Categoría" pendingText="Creando..." />
           </form>
         </CardContent>
       </Card>
 
       <Card className="w-full shadow-lg">
         <CardHeader>
-          <CardTitle className="text-2xl font-bold flex items-center"><ListChecks className="mr-2"/> Existing Categories</CardTitle>
-          <CardDescription>Manage all current categories.</CardDescription>
+          <CardTitle className="text-2xl font-bold flex items-center"><ListChecks className="mr-2"/> Categorías Existentes</CardTitle>
+          <CardDescription>Gestiona todas las categorías actuales.</CardDescription>
         </CardHeader>
         <CardContent>
           {loadingCategories ? (

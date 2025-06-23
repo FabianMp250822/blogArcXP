@@ -1,8 +1,7 @@
-
 'use server';
 
 import { z } from 'zod';
-import { getUserProfileByEmail, updateUserProfile } from '@/lib/firebase/firestore';
+import { getUserProfile, updateUserProfile } from '@/lib/firebase/firestore';
 import { revalidatePath } from 'next/cache';
 import * as admin from 'firebase-admin';
 
@@ -20,11 +19,11 @@ if (admin.apps.length === 0) {
 }
 
 const ManageUserRoleSchema = z.object({
-  userEmail: z.string().email('Invalid email address.'),
+  userEmail: z.string().email('Correo electrónico inválido.'),
   newRole: z.enum(['user', 'journalist', 'admin'], {
-    errorMap: () => ({ message: 'Invalid role selected.' }),
+    errorMap: () => ({ message: 'Rol seleccionado inválido.' }),
   }),
-  idToken: z.string().min(1, 'Admin authentication token is required.'),
+  idToken: z.string().min(1, 'Se requiere el token de autenticación del administrador.'),
 });
 
 export type ManageUserRoleFormState = {
@@ -44,27 +43,27 @@ export async function manageUserRoleAction(
 ): Promise<ManageUserRoleFormState> {
 
   if (admin.apps.length === 0) {
-    const detail = adminSDKError ? `Details: ${adminSDKError}` : "Please check server logs for specific errors.";
+    const detail = adminSDKError ? `Detalles: ${adminSDKError}` : "Por favor revisa los logs del servidor para más detalles.";
     return {
-        message: `Firebase Admin SDK failed to initialize. ${detail}`,
+        message: `El SDK de Firebase Admin no se pudo inicializar. ${detail}`,
         success: false,
-        errors: { _form: [`Critical: Admin SDK initialization failure. ${detail}`] }
+        errors: { _form: [`Crítico: Fallo de inicialización del SDK Admin. ${detail}`] }
     };
   }
 
   const idToken = formData.get('idToken') as string;
   if (!idToken) {
-    return { message: 'Admin authentication token missing.', success: false, errors: { _form: ['Authentication required.'] } };
+    return { message: 'Falta el token de autenticación del administrador.', success: false, errors: { _form: ['Autenticación requerida.'] } };
   }
 
   try {
     const decodedToken = await admin.auth().verifyIdToken(idToken);
     if (decodedToken.role !== 'admin') {
-      return { message: 'Permission denied. Only admins can manage user roles.', success: false, errors: { _form: ['Unauthorized action.'] } };
+      return { message: 'Permiso denegado. Solo los administradores pueden gestionar roles de usuario.', success: false, errors: { _form: ['Acción no autorizada.'] } };
     }
   } catch (tokenError) {
-    console.error("Error verifying admin ID token:", tokenError);
-    return { message: 'Could not verify admin status.', success: false, errors: { _form: ['Admin verification failed.'] } };
+    console.error("Error verificando el token de administrador:", tokenError);
+    return { message: 'No se pudo verificar el estado de administrador.', success: false, errors: { _form: ['Fallo la verificación de administrador.'] } };
   }
 
   const validatedFields = ManageUserRoleSchema.safeParse({
@@ -75,7 +74,7 @@ export async function manageUserRoleAction(
 
   if (!validatedFields.success) {
     return {
-      message: 'Validation failed. Please check the form fields.',
+      message: 'Validación fallida. Por favor revisa los campos del formulario.',
       errors: validatedFields.error.flatten().fieldErrors,
       success: false,
     };
@@ -84,32 +83,32 @@ export async function manageUserRoleAction(
   const { userEmail, newRole } = validatedFields.data;
 
   try {
-    const targetUserProfile = await getUserProfileByEmail(userEmail);
+    const targetUserProfile = await getUserProfile(userEmail);
 
     if (!targetUserProfile || !targetUserProfile.uid) {
       return {
-        message: `User with email '${userEmail}' not found or UID is missing. Cannot update role.`,
+        message: `No se encontró el usuario con correo '${userEmail}' o falta el UID. No se puede actualizar el rol.`,
         success: false,
-        errors: { userEmail: ['User not found or profile incomplete.'] }
+        errors: { userEmail: ['Usuario no encontrado o perfil incompleto.'] }
       };
     }
 
     await admin.auth().setCustomUserClaims(targetUserProfile.uid, { role: newRole });
-    console.log(`Successfully set custom auth claims for ${userEmail} to ${newRole}.`);
+    console.log(`Rol de autenticación actualizado correctamente para ${userEmail} a ${newRole}.`);
 
     await updateUserProfile(targetUserProfile.uid, { role: newRole });
-    console.log(`Successfully updated Firestore role for ${userEmail} to ${newRole}.`);
+    console.log(`Rol en Firestore actualizado correctamente para ${userEmail} a ${newRole}.`);
 
     revalidatePath('/admin/manage-roles');
 
     return {
-        message: `Successfully updated role and permissions for ${userEmail} to '${newRole}'.`,
+        message: `Rol y permisos actualizados correctamente para ${userEmail} a '${newRole}'.`,
         success: true
     };
 
   } catch (error) {
-    console.error('Error managing user role:', error);
-    let errorMessage = 'An unexpected error occurred while updating the user role.';
+    console.error('Error gestionando el rol de usuario:', error);
+    let errorMessage = 'Ocurrió un error inesperado al actualizar el rol del usuario.';
     if (error instanceof Error) {
         errorMessage = error.message;
     }

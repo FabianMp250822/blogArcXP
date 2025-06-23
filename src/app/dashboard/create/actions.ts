@@ -265,8 +265,8 @@ export async function createArticleAction(
             revalidatePath('/admin/create');
         } catch (categoryError: any) {
             return {
-                message: `Failed to create new category: ${categoryError.message}`,
-                errors: { newCategoryName: [categoryError.message], _form: [`Failed to create new category: ${categoryError.message}`] },
+                message: `No se pudo crear la nueva categoría: ${categoryError.message}`,
+                errors: { newCategoryName: [categoryError.message], _form: [`No se pudo crear la nueva categoría: ${categoryError.message}`] },
                 success: false,
             };
         }
@@ -386,11 +386,14 @@ export async function createArticleAction(
     revalidatePath('/dashboard');
     revalidatePath('/');
 
-    return { message: '¡Publicación guardada como borrador con éxito!', success: true };
+    return {
+      message: '¡Publicación guardada como borrador con éxito!',
+      success: true
+    };
 
   } catch (error) {
     console.error('Error creating article:', error);
-    let errorMessage = 'An unexpected error occurred while creating the article.';
+    let errorMessage = 'Ocurrió un error inesperado al crear el artículo.';
     if (error instanceof Error) {
         errorMessage = error.message;
     }

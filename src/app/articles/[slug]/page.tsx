@@ -108,7 +108,9 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
                 </p>
               )}
               <div className="flex items-center text-sm text-muted-foreground flex-wrap">
-                <span>Por {article.authorName}</span>
+                <span>
+                  Por {article.authorName === 'Unnamed Author' ? 'Dr. Robinson Rada Gonzalez' : article.authorName}
+                </span>
                 <span className="mx-2">•</span>
                 <time dateTime={article.publishedAt ? article.publishedAt.toDate().toISOString() : new Date().toISOString()}>
                   {format(article.publishedAt ? article.publishedAt.toDate() : new Date(), "d 'de' MMMM 'de' yyyy", { locale: es })}

@@ -24,7 +24,7 @@ export async function updateSiteSettingsAction(
     // Revalida todo el layout para que el header se actualice en todas partes
     revalidatePath('/', 'layout');
 
-    return { success: true, message: 'Site settings updated successfully!' };
+    return { success: true, message: '¡Configuración del sitio actualizada exitosamente!' };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
     return { success: false, message: errorMessage };

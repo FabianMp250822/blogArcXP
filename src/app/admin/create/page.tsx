@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useActionState, useTransition } from 'react';
@@ -184,47 +183,47 @@ export default function CreateArticlePage() {
   return (
     <Card className="w-full max-w-3xl mx-auto shadow-xl">
       <CardHeader>
-        <CardTitle className="text-3xl font-headline text-primary">Create New Article (Admin)</CardTitle>
-        <CardDescription>Fill in the details below to publish a new article.</CardDescription>
+        <CardTitle className="text-3xl font-headline text-primary">Crear Nuevo Artículo (Admin)</CardTitle>
+        <CardDescription>Completa los siguientes datos para publicar un nuevo artículo.</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           {state.message && !state.success && state.errors?._form && (
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Form Error</AlertTitle>
+              <AlertTitle>Error en el formulario</AlertTitle>
               <AlertDescription>{state.errors._form.join(', ')}</AlertDescription>
             </Alert>
           )}
 
           <div>
-            <Label htmlFor="title" className="font-medium">Title</Label>
+            <Label htmlFor="title" className="font-medium">Título</Label>
             <Input id="title" {...register('title')} aria-invalid={errors.title ? "true" : "false"} className="mt-1"/>
             {errors.title && <p className="text-sm text-destructive mt-1">{errors.title.message}</p>}
           </div>
 
           <div>
-            <Label htmlFor="excerpt" className="font-medium">Excerpt</Label>
+            <Label htmlFor="excerpt" className="font-medium">Extracto</Label>
             <Textarea id="excerpt" {...register('excerpt')} aria-invalid={errors.excerpt ? "true" : "false"} className="mt-1" rows={3}/>
             {errors.excerpt && <p className="text-sm text-destructive mt-1">{errors.excerpt.message}</p>}
           </div>
 
           <div>
-            <Label htmlFor="content" className="font-medium">Content (Markdown)</Label>
+            <Label htmlFor="content" className="font-medium">Contenido (Markdown)</Label>
             <Textarea id="content" {...register('content')} aria-invalid={errors.content ? "true" : "false"} className="mt-1" rows={10}/>
             {errors.content && <p className="text-sm text-destructive mt-1">{errors.content.message}</p>}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <Label htmlFor="authorId" className="font-medium">Author</Label>
+              <Label htmlFor="authorId" className="font-medium">Autor</Label>
               <Controller
                 name="authorId"
                 control={control}
                 render={({ field }) => (
                   <Select onValueChange={field.onChange} value={field.value || ""}>
                     <SelectTrigger id="authorId" className="mt-1" aria-invalid={errors.authorId ? "true" : "false"}>
-                      <SelectValue placeholder="Select author" />
+                      <SelectValue placeholder="Selecciona un autor" />
                     </SelectTrigger>
                     <SelectContent>
                       {authors.map((author) => (
@@ -238,14 +237,14 @@ export default function CreateArticlePage() {
             </div>
 
             <div>
-              <Label htmlFor="categoryId" className="font-medium">Category</Label>
+              <Label htmlFor="categoryId" className="font-medium">Categoría</Label>
                <Controller
                 name="categoryId"
                 control={control}
                 render={({ field }) => (
                   <Select onValueChange={field.onChange} value={field.value || ""}>
                     <SelectTrigger id="categoryId" className="mt-1" aria-invalid={errors.categoryId ? "true" : "false"}>
-                      <SelectValue placeholder="Select category or create new" />
+                      <SelectValue placeholder="Selecciona o crea una categoría" />
                     </SelectTrigger>
                     <SelectContent>
                       {categories.map((category) => (
@@ -253,7 +252,7 @@ export default function CreateArticlePage() {
                       ))}
                       <SelectItem value={CREATE_NEW_CATEGORY_VALUE}>
                         <span className="flex items-center">
-                          <PlusCircle className="mr-2 h-4 w-4 text-primary" /> Create new category...
+                          <PlusCircle className="mr-2 h-4 w-4 text-primary" /> Crear nueva categoría...
                         </span>
                       </SelectItem>
                     </SelectContent>
@@ -266,25 +265,25 @@ export default function CreateArticlePage() {
           
           {showNewCategoryInput && (
             <div>
-              <Label htmlFor="newCategoryName" className="font-medium">New Category Name</Label>
+              <Label htmlFor="newCategoryName" className="font-medium">Nombre de la nueva categoría</Label>
               <Input 
                 id="newCategoryName" 
                 {...register('newCategoryName')} 
                 aria-invalid={errors.newCategoryName ? "true" : "false"} 
                 className="mt-1"
-                placeholder="Enter name for the new category"
+                placeholder="Introduce el nombre de la nueva categoría"
               />
               {errors.newCategoryName && <p className="text-sm text-destructive mt-1">{errors.newCategoryName.message}</p>}
             </div>
           )}
           
           <div>
-            <Label htmlFor="coverImage" className="font-medium">Cover Image</Label>
+            <Label htmlFor="coverImage" className="font-medium">Imagen de portada</Label>
             <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-dashed rounded-md border-input hover:border-primary transition-colors">
               <div className="space-y-1 text-center">
                 {imagePreview ? (
                    <div className="relative w-full h-48 mb-2">
-                     <Image src={imagePreview} alt="Cover image preview" layout="fill" objectFit="contain" />
+                     <Image src={imagePreview} alt="Vista previa de la portada" layout="fill" objectFit="contain" />
                    </div>
                 ) : (
                   <UploadCloud className="mx-auto h-12 w-12 text-muted-foreground" />
@@ -294,30 +293,30 @@ export default function CreateArticlePage() {
                     htmlFor="coverImage"
                     className="relative cursor-pointer rounded-md font-medium text-primary hover:text-accent focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-ring"
                   >
-                    <span>Upload a file</span>
+                    <span>Subir archivo</span>
                     <input id="coverImage" type="file" {...register('coverImage')} className="sr-only" accept="image/*" />
                   </label>
-                  <p className="pl-1">or drag and drop</p>
+                  <p className="pl-1">o arrastra y suelta</p>
                 </div>
-                <p className="text-xs text-muted-foreground">PNG, JPG, GIF up to 5MB</p>
+                <p className="text-xs text-muted-foreground">PNG, JPG, GIF hasta 5MB</p>
               </div>
             </div>
             {errors.coverImage && <p className="text-sm text-destructive mt-1">{errors.coverImage.message as string}</p>}
           </div>
 
           <div>
-            <Label htmlFor="status" className="font-medium">Status</Label>
+            <Label htmlFor="status" className="font-medium">Estado</Label>
              <Controller
                 name="status"
                 control={control}
                 render={({ field }) => (
                     <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value || "draft"}>
                         <SelectTrigger id="status" className="mt-1" aria-invalid={errors.status ? "true" : "false"}>
-                        <SelectValue placeholder="Select status" />
+                        <SelectValue placeholder="Selecciona el estado" />
                         </SelectTrigger>
                         <SelectContent>
-                        <SelectItem value="draft">Draft</SelectItem>
-                        <SelectItem value="published">Published</SelectItem>
+                        <SelectItem value="draft">Borrador</SelectItem>
+                        <SelectItem value="published">Publicado</SelectItem>
                         </SelectContent>
                     </Select>
                 )}
@@ -331,3 +330,4 @@ export default function CreateArticlePage() {
     </Card>
   );
 }
+

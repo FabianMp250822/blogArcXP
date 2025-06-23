@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useActionState, useTransition } from 'react'; 
@@ -19,9 +18,9 @@ import type { UserProfile } from '@/types';
 import { useAuth } from '@/hooks/use-auth'; 
 
 const FormSchema = z.object({
-  userEmail: z.string().email('Please enter a valid email address.'),
+  userEmail: z.string().email('Por favor, introduce un correo electrónico válido.'),
   newRole: z.enum(['user', 'journalist', 'admin'], {
-    required_error: 'Please select a role.',
+    required_error: 'Por favor, selecciona un rol.',
   }),
 });
 
@@ -32,7 +31,7 @@ function SubmitButton() {
   return (
     <Button type="submit" disabled={pending} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
       {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-      {pending ? 'Updating Role...' : 'Update User Role'}
+      {pending ? 'Actualizando rol...' : 'Actualizar rol de usuario'}
     </Button>
   );
 }
@@ -57,7 +56,7 @@ export default function ManageUserRolesPage() {
   useEffect(() => {
     if (state.success) {
       toast({
-        title: 'Success!',
+        title: '¡Éxito!',
         description: state.message,
         variant: 'default',
         className: 'bg-green-500 text-white',
@@ -67,7 +66,7 @@ export default function ManageUserRolesPage() {
     } else if (state.message && !state.success && (state.errors || state.message !== '')) {
        toast({
         title: 'Error',
-        description: state.message || 'Failed to update role. Please check the form.',
+        description: state.message || 'No se pudo actualizar el rol. Por favor revisa el formulario.',
         variant: 'destructive',
         icon: <AlertTriangle className="h-5 w-5" />,
       });
@@ -98,46 +97,46 @@ export default function ManageUserRolesPage() {
   return (
     <Card className="w-full max-w-xl mx-auto shadow-xl">
       <CardHeader>
-        <CardTitle className="text-3xl font-headline text-primary">Manage User Roles</CardTitle>
-        <CardDescription>Assign or update roles for users in the system. Changes will update Firestore profiles and Firebase Auth custom claims.</CardDescription>
+        <CardTitle className="text-3xl font-headline text-primary">Gestionar Roles de Usuario</CardTitle>
+        <CardDescription>Asigna o actualiza roles para los usuarios del sistema. Los cambios actualizarán los perfiles en Firestore y los claims personalizados en Firebase Auth.</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           {state.message && !state.success && state.errors?._form && (
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Form Error</AlertTitle>
+              <AlertTitle>Error en el formulario</AlertTitle>
               <AlertDescription>{state.errors._form.join(', ')}</AlertDescription>
             </Alert>
           )}
 
           <div>
-            <Label htmlFor="userEmail" className="font-medium">User Email</Label>
+            <Label htmlFor="userEmail" className="font-medium">Correo electrónico del usuario</Label>
             <Input 
               id="userEmail" 
               type="email"
               {...register('userEmail')} 
               aria-invalid={errors.userEmail ? "true" : "false"} 
               className="mt-1"
-              placeholder="Enter email of existing user"
+              placeholder="Introduce el correo del usuario existente"
             />
             {errors.userEmail && <p className="text-sm text-destructive mt-1">{errors.userEmail.message}</p>}
           </div>
 
           <div>
-            <Label htmlFor="newRole" className="font-medium">New Role</Label>
+            <Label htmlFor="newRole" className="font-medium">Nuevo rol</Label>
             <Controller
               name="newRole"
               control={control}
               render={({ field }) => (
                 <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value as UserProfile['role']}>
                   <SelectTrigger id="newRole" className="mt-1" aria-invalid={errors.newRole ? "true" : "false"}>
-                    <SelectValue placeholder="Select new role" />
+                    <SelectValue placeholder="Selecciona el nuevo rol" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="user">User</SelectItem>
-                    <SelectItem value="journalist">Journalist</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="user">Usuario</SelectItem>
+                    <SelectItem value="journalist">Periodista</SelectItem>
+                    <SelectItem value="admin">Administrador</SelectItem>
                   </SelectContent>
                 </Select>
               )}

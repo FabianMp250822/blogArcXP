@@ -97,23 +97,23 @@ export default function Navbar({ siteSettings }: NavbarProps) {
                   {(role === 'admin' || role === 'journalist') && (
                      <DropdownMenuItem onClick={() => router.push('/dashboard')}>
                       <LayoutDashboard className="mr-2 h-4 w-4" />
-                      Dashboard
+                      Panel
                     </DropdownMenuItem>
                   )}
                   {isAdmin && (
                     <DropdownMenuItem onClick={() => router.push('/admin')}>
                       <ShieldCheck className="mr-2 h-4 w-4" />
-                      Old Admin Panel
+                      Panel administración
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuItem onClick={handleSignOut}>
                     <LogOut className="mr-2 h-4 w-4" />
-                    Sign out
+                    Cerrar sesión
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              <Button onClick={() => router.push('/login')} variant="ghost" size="icon" className="h-auto w-auto p-1 text-primary-foreground hover:bg-primary/80 hover:text-primary-foreground" title="Login">
+              <Button onClick={() => router.push('/login')} variant="ghost" size="icon" className="h-auto w-auto p-1 text-primary-foreground hover:bg-primary/80 hover:text-primary-foreground" title="Iniciar sesión">
                 <User className="h-4 w-4" />
               </Button>
             )}
@@ -133,7 +133,7 @@ export default function Navbar({ siteSettings }: NavbarProps) {
         </div>
       </div>
 
-      {/* Main Black Bar */}
+      {/* Main Black Bar */} 
       <div className="bg-black text-white">
         <div className="container mx-auto px-4 py-2 flex items-center justify-between">
           {/* Left: Hamburger Menu (mobile) / Spacer (desktop) */}
@@ -146,12 +146,12 @@ export default function Navbar({ siteSettings }: NavbarProps) {
           {/* Center: Logo */}
           <div className="flex-1 flex justify-center">
             {/* 5. Reemplaza el logo estático por uno dinámico */}
-            <Link href="/" className="flex items-center space-x-3" aria-label={`${siteSettings.siteName} Home`}>
+            <Link href="/" className="flex items-center space-x-3" aria-label={`Inicio de ${siteSettings.siteName}`}>
               <Image 
                 src={siteSettings.logoUrl} 
-                alt={`${siteSettings.siteName} Logo`}
-                width={120} // Ajusta el ancho según tu logo
-                height={40}  // Ajusta la altura según tu logo
+                alt={`Logo de ${siteSettings.siteName}`}
+                width={120}
+                height={40}
                 className="h-8 md:h-10 w-auto"
                 priority
               />
@@ -181,7 +181,7 @@ export default function Navbar({ siteSettings }: NavbarProps) {
                   rel="noopener noreferrer"
                   className="hover:underline"
                 >
-                  Hable con el programa
+                  Conviértete en periodista
                 </Link>
               </span>
             </div>

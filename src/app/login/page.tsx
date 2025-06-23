@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, type FormEvent } from 'react';
@@ -38,9 +37,9 @@ export default function LoginPage() {
     <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
       <Card className="w-full max-w-md shadow-xl">
         <CardHeader>
-          <CardTitle className="text-2xl font-headline text-center text-primary">Dashboard Login</CardTitle>
+          <CardTitle className="text-2xl font-headline text-center text-primary">Iniciar sesión en el panel</CardTitle>
           <CardDescription className="text-center">
-            Access your article management dashboard.
+            Accede a tu panel de gestión de artículos.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -48,12 +47,12 @@ export default function LoginPage() {
             {error && (
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Login Error</AlertTitle>
+                <AlertTitle>Error de inicio de sesión</AlertTitle>
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
             <div>
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">Correo electrónico</Label>
               <Input
                 id="email"
                 type="email"
@@ -64,7 +63,7 @@ export default function LoginPage() {
               />
             </div>
             <div>
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">Contraseña</Label>
               <Input
                 id="password"
                 type="password"
@@ -75,7 +74,7 @@ export default function LoginPage() {
               />
             </div>
             <Button type="submit" disabled={loading} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
-              {loading ? 'Signing In...' : 'Sign In'}
+              {loading ? 'Iniciando sesión...' : 'Iniciar sesión'}
               <LogInIcon className="ml-2 h-4 w-4" />
             </Button>
           </form>
@@ -84,3 +83,4 @@ export default function LoginPage() {
     </div>
   );
 }
+

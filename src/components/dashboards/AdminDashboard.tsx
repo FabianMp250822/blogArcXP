@@ -188,32 +188,35 @@ export default function AdminDashboard() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
          <div>
-            <h1 className="text-3xl font-headline text-primary">Admin Article Management</h1>
-            <p className="text-muted-foreground">Oversee all articles, {userProfile?.displayName || user?.email}.</p>
+            <h1 className="text-3xl font-headline text-primary">Gestión de artículos (Admin)</h1>
+            <p className="text-muted-foreground">Supervisa todos los artículos, {userProfile?.displayName || user?.email}.</p>
         </div>
         <Link href="/dashboard/create">
           <Button className="bg-accent hover:bg-accent/80 text-accent-foreground">
-            <FilePlus className="mr-2 h-5 w-5" /> Create New Article
+            <FilePlus className="mr-2 h-5 w-5" /> Crear nuevo artículo
           </Button>
         </Link>
       </div>
 
       <Tabs defaultValue="pending_review" onValueChange={(value) => setCurrentTab(value as StatusFilter)}>
         <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="pending_review">Pending Review</TabsTrigger>
-          <TabsTrigger value="published">Published</TabsTrigger>
-          <TabsTrigger value="draft">Drafts</TabsTrigger>
-          <TabsTrigger value="all">All Articles</TabsTrigger>
+          <TabsTrigger value="pending_review">Pendientes de revisión</TabsTrigger>
+          <TabsTrigger value="published">Publicados</TabsTrigger>
+          <TabsTrigger value="draft">Borradores</TabsTrigger>
+          <TabsTrigger value="all">Todos los artículos</TabsTrigger>
         </TabsList>
         <TabsContent value={currentTab}>
             {loading && <div className="flex justify-center py-4"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>}
             {!loading && (
                 <ArticleTable
-                    articles={filteredArticles}
-                    caption={`Showing ${currentTab.replace('_', ' ')} articles.`}
+                    articles={filteredArticles.map(article => ({
+                      ...article,
+                      authorName: article.authorName === 'Unnamed Author' ? 'Dr. Robinson Rada Gonzalez' : article.authorName
+                    }))}
+                    caption={`Mostrando artículos: ${currentTab.replace('_', ' ')}`}
                     getActionsForArticle={getActions}
                     isLoading={actionLoading}
-                    onStatusChange={handleStatusChange} // <-- PASA EL MANEJADOR AQUÍ
+                    onStatusChange={handleStatusChange}
                 />
             )}
         </TabsContent>
@@ -222,21 +225,21 @@ export default function AdminDashboard() {
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the article
-              "{articleToDelete?.title}" and its associated files.
+              Esta acción no se puede deshacer. Esto eliminará permanentemente el artículo
+              "{articleToDelete?.title}" y sus archivos asociados.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setArticleToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setArticleToDelete(null)}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDeleteArticle}
               className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
               disabled={isPending || (articleToDelete !== null && actionLoading[`delete-${articleToDelete.id}`])}
             >
               {isPending || (articleToDelete && actionLoading[`delete-${articleToDelete.id}`]) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Delete
+              Eliminar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
