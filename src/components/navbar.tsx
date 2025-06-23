@@ -160,12 +160,30 @@ export default function Navbar({ siteSettings }: NavbarProps) {
 
           {/* Right Controls */}
           <div className="flex items-center space-x-1.5 sm:space-x-2 md:space-x-3">
-            <Button className="bg-primary text-primary-foreground hover:bg-primary/90 text-xs px-2 py-1 md:px-3 md:py-1.5 h-auto rounded-sm whitespace-nowrap">
-              <MessageCircle className="mr-1 h-3 w-3 md:h-4 md:w-4" /> Hable con el programa
+            <Button
+              className="bg-primary text-primary-foreground hover:bg-primary/90 text-xs px-2 py-1 md:px-3 md:py-1.5 h-auto rounded-sm whitespace-nowrap"
+              asChild
+            >
+              <Link
+                href="https://wa.me/573058028169"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <MessageCircle className="mr-1 h-3 w-3 md:h-4 md:w-4" /> Hable con el programa
+              </Link>
             </Button>
             <div className="hidden sm:flex items-center space-x-1 text-xs whitespace-nowrap">
               <RadioTower className="h-3 w-3 text-red-500 animate-pulse" />
-              <span>La W con Julio Sánchez Cristo</span> {/* Static for now */}
+              <span>
+                <Link
+                  href="https://wa.me/573058028169"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:underline"
+                >
+                  Hable con el programa
+                </Link>
+              </span>
             </div>
              {/* Fallback login for mobile if not covered by hamburger, can be removed if hamburger handles all auth states */}
             <div className="md:hidden">
