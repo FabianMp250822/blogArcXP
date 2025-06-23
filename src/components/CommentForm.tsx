@@ -8,6 +8,9 @@ import { Textarea } from './ui/textarea';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useState } from 'react';
+import { getFirestore, doc, getDoc } from 'firebase/firestore';
+import app from '@/lib/firebase/config';
 
 interface CommentFormProps {
   articleId: string;
@@ -17,11 +20,32 @@ interface CommentFormProps {
 }
 
 export function CommentForm({ articleId, articleSlug, parentId = null, onCommentPosted }: CommentFormProps) {
-  const { user, userProfile, loading } = useAuth();
+  const { user, loading } = useAuth();
   const { toast } = useToast();
   const formRef = useRef<HTMLFormElement>(null);
   const [isPending, startTransition] = useTransition();
   const [state, formAction] = useActionState(addCommentAction, { success: false, message: '' });
+  const [checkingVerification, setCheckingVerification] = useState(false);
+  const [emailVerified, setEmailVerified] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      setCheckingVerification(true);
+      const db = getFirestore(app);
+      const userRef = doc(db, 'users', user.uid);
+      getDoc(userRef)
+        .then((docSnap) => {
+          if (docSnap.exists()) {
+            setEmailVerified(!!docSnap.data().emailVerified);
+          } else {
+            setEmailVerified(false);
+          }
+        })
+        .finally(() => setCheckingVerification(false));
+    } else {
+      setEmailVerified(null);
+    }
+  }, [user]);
 
   useEffect(() => {
     if (state.message) {
@@ -41,7 +65,7 @@ export function CommentForm({ articleId, articleSlug, parentId = null, onComment
     });
   };
 
-  if (loading) {
+  if (loading || checkingVerification || (user && emailVerified === null)) {
     return <div className="flex justify-center py-4"><Loader2 className="h-6 w-6 animate-spin" /></div>;
   }
 
@@ -55,7 +79,7 @@ export function CommentForm({ articleId, articleSlug, parentId = null, onComment
     );
   }
 
-  if (userProfile?.role !== 'admin' && userProfile?.role !== 'journalist' && !user.emailVerified) {
+  if (emailVerified === false) {
     return (
       <Alert variant="destructive">
         <AlertCircle className="h-4 w-4" />
