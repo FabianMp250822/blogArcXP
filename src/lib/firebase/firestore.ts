@@ -23,6 +23,15 @@ import {
 import { db } from './config';
 import type { Article, Author, Category, Comment } from '@/types';
 
+// Define SiteSettings type if not already imported
+export type SiteSettings = {
+  siteName: string;
+  logoUrl: string;
+  primaryColor: string;
+  secondaryColor: string;
+  fontFamily: string;
+};
+
 // Helper to convert Firestore doc to Article
 const articleFromDoc = (docSnap: QueryDocumentSnapshot<DocumentData> | DocumentData): Article => {
   const data = 'data' in docSnap ? docSnap.data() : docSnap;
@@ -448,3 +457,31 @@ export async function updateSiteSettings(data: Partial<SiteSettings>): Promise<v
   const settingsRef = doc(db, 'settings', 'siteConfig');
   await setDoc(settingsRef, data, { merge: true });
 }
+
+/**
+ * Busca artículos publicados por coincidencia parcial en título, excerpt o contenido.
+ * La búsqueda es insensible a mayúsculas y funciona con cualquier fragmento del texto.
+ */
+export async function searchArticles(queryText: string, limitCount: number = 10): Promise<Article[]> {
+  if (!queryText || !queryText.trim()) return [];
+  const articlesRef = collection(db, 'articles');
+  // Trae los artículos publicados más recientes (puedes aumentar el límite si tienes muchos artículos)
+  const q = query(
+    articlesRef,
+    where('status', '==', 'published'),
+    orderBy('publishedAt', 'desc'),
+    limit(50) // Puedes ajustar este límite según la cantidad de artículos que tengas
+  );
+  const snapshot = await getDocs(q);
+  const lowerQuery = queryText.toLowerCase();
+  // Filtra en el cliente para encontrar cualquier coincidencia parcial
+  return snapshot.docs
+    .map(docSnap => articleFromDoc(docSnap))
+    .filter(article =>
+      (article.title && article.title.toLowerCase().includes(lowerQuery)) ||
+      (article.excerpt && article.excerpt.toLowerCase().includes(lowerQuery)) ||
+      (article.content && article.content.toLowerCase().includes(lowerQuery))
+    )
+    .slice(0, limitCount);
+}
+     

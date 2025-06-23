@@ -22,6 +22,7 @@ import {
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale'; // Import Spanish locale
+import { SearchDrawer } from './SearchDrawer';
 
 // 3. Define las props que el componente espera recibir
 interface NavbarProps {
@@ -33,6 +34,7 @@ export default function Navbar({ siteSettings }: NavbarProps) {
   const { user, userProfile, loading, signOutUser, isAdmin, role } = useAuth();
   const router = useRouter();
   const [currentTime, setCurrentTime] = useState<string | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   useEffect(() => {
     const updateClock = () => {
@@ -126,9 +128,16 @@ export default function Navbar({ siteSettings }: NavbarProps) {
               </Button>
             )}
             
-            <Button variant="ghost" size="icon" className="h-auto w-auto p-1 text-primary-foreground hover:bg-primary/80 hover:text-primary-foreground">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-auto w-auto p-1 text-primary-foreground hover:bg-primary/80 hover:text-primary-foreground"
+              onClick={() => setSearchOpen(true)}
+              title="Buscar artículos"
+            >
               <Search className="h-4 w-4" />
             </Button>
+            <SearchDrawer open={searchOpen} onClose={() => setSearchOpen(false)} />
           </div>
         </div>
       </div>
@@ -150,9 +159,9 @@ export default function Navbar({ siteSettings }: NavbarProps) {
               <Image 
                 src={siteSettings.logoUrl} 
                 alt={`Logo de ${siteSettings.siteName}`}
-                width={120}
-                height={40}
-                className="h-8 md:h-10 w-auto"
+                width={156} // 120 * 1.3 = 156
+                height={52} // 40 * 1.3 = 52
+                className="h-10 md:h-[52px] w-auto" // h-8*1.3 ≈ h-10, md:h-10*1.3 ≈ md:h-[52px]
                 priority
               />
             </Link>
@@ -176,9 +185,7 @@ export default function Navbar({ siteSettings }: NavbarProps) {
               <RadioTower className="h-3 w-3 text-red-500 animate-pulse" />
               <span>
                 <Link
-                  href="https://wa.me/573058028169"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href="/register-journalist"
                   className="hover:underline"
                 >
                   Conviértete en periodista
@@ -198,3 +205,4 @@ export default function Navbar({ siteSettings }: NavbarProps) {
     </header>
   );
 }
+

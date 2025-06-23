@@ -114,8 +114,11 @@ export type UserProfile = {
   role: 'user' | 'journalist' | 'admin';
   bio?: string;
   twitter?: string;
-  // --- AÑADE ESTA LÍNEA ---
-  blockedUsers?: string[]; // Array de UIDs de usuarios bloqueados
+  blockedUsers?: string[];
+  // Añade el estado de periodista
+  journalistStatus?: 'pending' | 'approved' | 'rejected'; // <-- NUEVO
+  mediaOutlet?: string; // Medio de comunicación (opcional)
+  portfolioUrl?: string; // Enlace a portafolio (requerido para periodista)
 };
 
 export type SiteSettings = {
