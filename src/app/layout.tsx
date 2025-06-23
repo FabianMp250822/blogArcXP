@@ -19,9 +19,22 @@ const fontMap = {
   lato: fontLato,
 };
 
-export const metadata: Metadata = {
-  title: 'Firebase News',
-  description: 'A modern news website built with Next.js and Firebase.',
+export const metadata = {
+  title: "Surcos",
+  description: "Todo sobre la Sociedad Colombiana de Urbanistas y Desarrolladores. Autor: Fabián Muñoz Puello. Diseño: Leidy Vega Anaya.",
+  keywords: [
+    "Sociedad Colombiana de Urbanistas",
+    "Desarrolladores",
+    "Urbanismo",
+    "Fabián Muñoz Puello",
+    "Leidy Vega Anaya",
+    "Surcos",
+    "Colombia"
+  ],
+  authors: [
+    { name: "Fabián Muñoz Puello", url: "https://github.com/FabianMp250822" },
+    { name: "Leidy Vega Anaya" }
+  ]
 };
 
 export default async function RootLayout({
