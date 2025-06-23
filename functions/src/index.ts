@@ -152,7 +152,7 @@ export const sendVerificationEmail = onDocumentCreated(
     `;
 
     await transporter.sendMail({
-      from: "\"Validaciones WRadio\" <validaciones@tecnosalud.cloud>",
+      from: "\"Validaciones\" <validaciones@tecnosalud.cloud>",
       to: user.email,
       subject: "Verifica tu correo electrónico",
       html,
