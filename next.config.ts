@@ -35,8 +35,11 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  serverActions: {
-    bodySizeLimit: 25 * 1024 * 1024, // 25 MB
+  experimental: {
+    serverActions: {
+      bodySizeLimit: 25 * 1024 * 1024, // 25 MB
+      // allowedOrigins: ['my-proxy.com', '*.my-proxy.com'], // Descomenta y ajusta si usas proxies
+    },
   },
 };
 
