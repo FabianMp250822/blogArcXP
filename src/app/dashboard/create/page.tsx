@@ -363,7 +363,7 @@ export default function CreateDashboardArticlePage() {
                             <RichTextEditor
                               value={field.value || ''}
                               onChange={field.onChange}
-                              placeholder="Escribe tu artículo aquí. Puedes pegar contenido desde Word."
+                              placeholder="Puedes copiar y pegar desde Word. El formato (negritas, listas, títulos, tablas, etc.) se mantendrá."
                             />
                             <Button
                               type="button"
@@ -386,7 +386,7 @@ export default function CreateDashboardArticlePage() {
                             <SimpleTextEditor
                               value={field.value || ''}
                               onChange={field.onChange}
-                              placeholder="Escribe tu artículo aquí usando Markdown."
+                              placeholder="Escribe tu artículo aquí usando HTML o Markdown."
                             />
                             <Button
                               type="button"

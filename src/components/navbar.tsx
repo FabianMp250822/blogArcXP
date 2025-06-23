@@ -53,11 +53,11 @@ export default function Navbar({ siteSettings }: NavbarProps) {
 
   const navLinks = [
     { href: "/", label: "INICIO" },
-    { href: "/programas", label: "PROGRAMAS" },
+    { href: "/category/programas", label: "PROGRAMAS" },
     { href: "/category/tema-del-da", label: "TEMA DEL DÍA" },
-    { href: "/denuncie", label: "DENUNCIE" },
-    { href: "/ciudades", label: "CIUDADES" },
-    { href: "/especiales", label: "ESPECIALES" },
+    { href: "/category/denuncie", label: "DENUNCIE" },
+    { href: "/category/ciudades", label: "CIUDADES" },
+    { href: "/category/especiales", label: "ESPECIALES" },
   ];
 
   return (

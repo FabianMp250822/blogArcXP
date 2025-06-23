@@ -1,13 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { Editor } from '@tinymce/tinymce-react';
+import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { SimpleTextEditor } from './SimpleTextEditor';
 
 interface RichTextEditorProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  outputFormat?: 'html' | 'markdown' | 'text';
   className?: string;
 }
 
@@ -15,53 +16,34 @@ export function RichTextEditor({
   value,
   onChange,
   placeholder = 'Escribe aquí...',
+  outputFormat = 'html',
   className = '',
 }: RichTextEditorProps) {
-  const [MDEditor, setMDEditor] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    const loadMDEditor = async () => {
-      try {
-        if (typeof window !== 'undefined') {
-          const { default: MDEditorComponent } = await import('@uiw/react-md-editor');
-          setMDEditor(() => MDEditorComponent);
-        }
-      } catch (err) {
-        console.warn('Error loading MD Editor, falling back to SimpleTextEditor:', err);
-        setError(true);
-      } finally {
-        setLoading(false);
-      }
-    };
+    // Simulate loading for 1 second
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 1000);
 
-    loadMDEditor();
+    return () => clearTimeout(timer);
   }, []);
 
-  const handleChange = useCallback(
-    (val: string | undefined) => {
-      onChange(val || '');
-    },
-    [onChange]
-  );
+  const handleChange = (val: string | undefined) => {
+    // Si el outputFormat es 'html', asegúrate de pasar HTML
+    if (outputFormat === 'html') {
+      onChange(val || ''); // content debe ser HTML
+    }
+    // Si necesitas soportar otros formatos, puedes agregar lógica aquí
+  };
 
   if (loading) {
     return (
       <div className="h-32 bg-muted animate-pulse rounded-md flex items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin" />
       </div>
-    );
-  }
-
-  if (error || !MDEditor) {
-    return (
-      <SimpleTextEditor
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        className={className}
-      />
     );
   }
 
@@ -99,15 +81,28 @@ export function RichTextEditor({
         `,
         }}
       />
-      <MDEditor
-        value={value ?? ''}
-        onChange={handleChange}
+      <Editor
+        apiKey="fw0bk0wkih2w0esgp70qreagiclmty3187kokrumd30f26hi"
+        value={value}
+        init={{
+          height: 400,
+          menubar: false,
+          plugins: [
+            'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview', 'anchor',
+            'searchreplace', 'visualblocks', 'code', 'fullscreen',
+            'insertdatetime', 'media', 'table', 'help', 'wordcount'
+          ],
+          toolbar:
+            'undo redo | formatselect | bold italic underline | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | removeformat | help',
+          paste_data_images: true,
+          paste_as_text: false,
+          paste_word_valid_elements: 'b,strong,i,em,h1,h2,h3,h4,h5,h6,p,ul,ol,li,table,tr,td,th,thead,tbody,span,div,br',
+          paste_enable_default_filters: true,
+          content_style: 'body { font-family:Helvetica,Arial,sans-serif; font-size:16px }',
+        }}
+        onEditorChange={handleChange}
         placeholder={placeholder}
-        preview="edit"
-        height={200}
-        data-color-mode="light"
       />
     </div>
   );
 }
-

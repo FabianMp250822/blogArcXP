@@ -65,7 +65,48 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
       case 'markdown':
       case 'standard':
         const mdArticle = article as MarkdownArticle;
-        // Preprocesa el markdown y luego pásalo por marked para convertir a HTML
+        // NUEVO: Si hay contentHtml, úsalo directamente
+        if ((mdArticle as any).contentHtml || (mdArticle as any).content?.startsWith('<')) {
+          const htmlContent = (mdArticle as any).contentHtml || (mdArticle as any).content;
+          return (
+            <>
+              <div className="relative w-full aspect-video rounded-lg overflow-hidden mb-8 shadow-lg">
+                <Image
+                  src={mdArticle.coverImageUrl || '/placeholder.png'}
+                  alt={mdArticle.title}
+                  fill
+                  priority
+                  className="object-cover"
+                />
+              </div>
+              <div className="article-content" dangerouslySetInnerHTML={{ __html: htmlContent }} />
+              <style>{`
+                .article-content p,
+                .article-content ul,
+                .article-content ol {
+                  margin-bottom: 2rem !important;
+                }
+                .article-content li,
+                .article-content li.MsoNormal {
+                  display: list-item !important;
+                  margin-bottom: 0.5rem;
+                  list-style-type: disc !important;
+                }
+                .article-content ul,
+                .article-content ol {
+                  padding-left: 2.5rem;
+                }
+                .article-content .MsoNormal {
+                  margin: 0 0 1.5rem 0;
+                  font-size: 1rem;
+                  line-height: 1.7;
+                  display: block;
+                }
+              `}</style>
+            </>
+          );
+        }
+        // Si no hay contentHtml, sigue con el renderizado markdown normal
         const htmlContent = marked.parse(preprocessMarkdown(mdArticle.content || ''));
         return (
           <>
@@ -78,10 +119,30 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
                 className="object-cover"
               />
             </div>
-            <div
-              className="prose prose-neutral max-w-none prose-headings:text-primary prose-blockquote:border-l-primary prose-a:text-primary prose-strong:text-primary prose-li:marker:text-primary prose-img:rounded-lg prose-img:shadow-md"
-              dangerouslySetInnerHTML={{ __html: htmlContent }}
-            />
+            <div className="article-content" dangerouslySetInnerHTML={{ __html: htmlContent }} />
+            <style>{`
+              .article-content p,
+              .article-content ul,
+              .article-content ol {
+                margin-bottom: 2rem !important;
+              }
+              .article-content li,
+              .article-content li.MsoNormal {
+                display: list-item !important;
+                margin-bottom: 0.5rem;
+                list-style-type: disc !important;
+              }
+              .article-content ul,
+              .article-content ol {
+                padding-left: 2.5rem;
+              }
+              .article-content .MsoNormal {
+                margin: 0 0 1.5rem 0;
+                font-size: 1rem;
+                line-height: 1.7;
+                display: block;
+              }
+            `}</style>
           </>
         );
       case 'pdf':
