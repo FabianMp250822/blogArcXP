@@ -9,6 +9,7 @@ import {
   FirestoreEvent,
 } from "firebase-functions/v2/firestore";
 import {QueryDocumentSnapshot} from "firebase-admin/firestore";
+import * as functions from "firebase-functions";
 
 // Initialize Firebase Admin SDK only once
 if (admin.apps.length === 0) {
@@ -159,4 +160,53 @@ export const sendVerificationEmail = onDocumentCreated(
     });
   }
 );
+
+/**
+ * Endpoint HTTP para verificar el correo electrónico usando token y uid.
+ * Permite CORS para https://surco.vercel.app
+ */
+export const verifyEmail = functions.https.onRequest(async (req, res) => {
+  // Permitir CORS solo para el dominio de tu frontend
+  res.set("Access-Control-Allow-Origin", "https://surco.vercel.app");
+  res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+
+  const {token, uid} = req.query;
+
+  if (!token || !uid) {
+    res.status(400).send("Faltan parámetros.");
+    return;
+  }
+
+  try {
+    const userDoc = await db.collection("users").doc(String(uid)).get();
+    if (!userDoc.exists) {
+      res.status(404).send("Usuario no encontrado.");
+      return;
+    }
+    const userData = userDoc.data();
+    if (
+      !userData ||
+      userData.emailVerificationToken !== token ||
+      userData.emailVerified === true
+    ) {
+      res.status(400).send("Token inválido o ya verificado.");
+      return;
+    }
+
+    await userDoc.ref.update({
+      emailVerified: true,
+      emailVerificationToken: admin.firestore.FieldValue.delete(),
+    });
+
+    res.status(200).send("Correo verificado correctamente.");
+  } catch (err) {
+    res.status(500).send("Error interno del servidor.");
+  }
+});
 
