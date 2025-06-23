@@ -19,6 +19,16 @@ export function SearchDrawer({ open, onClose }: { open: boolean; onClose: () => 
     setLoading(false);
   };
 
+  // Nueva función para manejar el click y cerrar el modal antes de navegar
+  const handleResultClick = (href: string) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    onClose();
+    // Espera un tick para que el modal se cierre antes de navegar
+    setTimeout(() => {
+      window.location.href = href;
+    }, 10);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-lg w-full">
@@ -47,10 +57,14 @@ export function SearchDrawer({ open, onClose }: { open: boolean; onClose: () => 
               )}
               {results.map(article => (
                 <li key={article.id}>
-                  <Link href={`/articles/${article.slug}`} className="block hover:underline">
+                  <a
+                    href={`/articles/${article.slug}`}
+                    className="block hover:underline"
+                    onClick={handleResultClick(`/articles/${article.slug}`)}
+                  >
                     <div className="font-semibold">{article.title}</div>
                     {article.excerpt && <div className="text-xs text-muted-foreground">{article.excerpt}</div>}
-                  </Link>
+                  </a>
                 </li>
               ))}
             </ul>

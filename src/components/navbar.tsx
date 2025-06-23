@@ -54,7 +54,7 @@ export default function Navbar({ siteSettings }: NavbarProps) {
   const navLinks = [
     { href: "/", label: "INICIO" },
     { href: "/programas", label: "PROGRAMAS" },
-    { href: "/tema-del-dia", label: "TEMA DEL DÍA" },
+    { href: "/category/tema-del-da", label: "TEMA DEL DÍA" },
     { href: "/denuncie", label: "DENUNCIE" },
     { href: "/ciudades", label: "CIUDADES" },
     { href: "/especiales", label: "ESPECIALES" },
@@ -91,7 +91,9 @@ export default function Navbar({ siteSettings }: NavbarProps) {
                 <DropdownMenuContent className="w-56" align="end" forceMount>
                   <DropdownMenuLabel className="font-normal">
                     <div className="flex flex-col space-y-1">
-                      <p className="text-sm font-medium leading-none">{userProfile?.displayName || user.displayName || user.email}</p>
+                      <p className="text-sm font-medium leading-none">
+                        {(userProfile?.displayName === 'Unnamed Author' ? 'Dr. Robinson Rada Gonzalez' : userProfile?.displayName) || user.displayName || user.email}
+                      </p>
                       {user.email && <p className="text-xs leading-none text-muted-foreground">{user.email}</p>}
                     </div>
                   </DropdownMenuLabel>

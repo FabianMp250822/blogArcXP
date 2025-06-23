@@ -9,6 +9,10 @@ import { SocialShare } from '@/components/SocialShare';
 import { CommentsSection } from '@/components/CommentsSection';
 import type { MarkdownArticle, PdfPublication, SequencePublication } from '@/types';
 import { HtmlRenderer } from '@/components/HtmlRenderer';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
+import { marked } from 'marked';
 
 interface ArticlePageProps {
   params: {
@@ -29,6 +33,23 @@ export async function generateMetadata({ params }: ArticlePageProps) {
   };
 }
 
+// Función para limpiar y mejorar el markdown antes de convertirlo a HTML
+function preprocessMarkdown(md: string): string {
+  let clean = md
+    // Convierte líneas que empiezan con "//" en subtítulos o bloques destacados
+    .replace(/^\/\/\s?(.*)$/gm, '<div style="color:#888;font-style:italic;margin:8px 0 4px 0;">$1</div>')
+    // Convierte líneas que parecen títulos pero no tienen "#"
+    .replace(/^([A-Z][^\n]{10,})$/gm, '<h2>$1</h2>')
+    // Opcional: convierte dobles saltos de línea en párrafos
+    .replace(/\n{2,}/g, '</p><p>')
+    // Opcional: convierte líneas en negrita si detecta ** o __
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/__(.*?)__/g, '<strong>$1</strong>');
+  // Asegura que todo esté dentro de un <p> si no es bloque
+  clean = `<p>${clean}</p>`;
+  return clean;
+}
+
 export default async function ArticlePage({ params }: ArticlePageProps) {
   const article = await getArticleBySlug(params.slug);
 
@@ -44,6 +65,8 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
       case 'markdown':
       case 'standard':
         const mdArticle = article as MarkdownArticle;
+        // Preprocesa el markdown y luego pásalo por marked para convertir a HTML
+        const htmlContent = marked.parse(preprocessMarkdown(mdArticle.content || ''));
         return (
           <>
             <div className="relative w-full aspect-video rounded-lg overflow-hidden mb-8 shadow-lg">
@@ -55,7 +78,10 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
                 className="object-cover"
               />
             </div>
-            <HtmlRenderer htmlContent={(mdArticle as any).content || ''} />
+            <div
+              className="prose prose-neutral max-w-none prose-headings:text-primary prose-blockquote:border-l-primary prose-a:text-primary prose-strong:text-primary prose-li:marker:text-primary prose-img:rounded-lg prose-img:shadow-md"
+              dangerouslySetInnerHTML={{ __html: htmlContent }}
+            />
           </>
         );
       case 'pdf':
