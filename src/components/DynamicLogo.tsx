@@ -23,8 +23,8 @@ export function DynamicLogo({ className }: DynamicLogoProps) {
       {imageError && isRobinsonBrand ? (
         <RobinsonRadaLogo 
           className="transition-all duration-300 hover:scale-105" 
-          width={200}
-          height={52}
+          width={260}
+          height={68}
         />
       ) : imageError && !isRobinsonBrand ? (
         // Si hay error pero NO es Robinson, mostrar texto elegante
@@ -42,8 +42,8 @@ export function DynamicLogo({ className }: DynamicLogoProps) {
           <Image 
             src={branding.logoUrl} 
             alt={`Logo de ${branding.siteName}`}
-            width={isRobinsonBrand ? 200 : 156}
-            height={52}
+            width={isRobinsonBrand ? 260 : 156}
+            height={isRobinsonBrand ? 68 : 52}
             className={`${className || "h-10 md:h-[52px] w-auto"} transition-all duration-300 hover:scale-105 ${
               imageLoading ? 'opacity-0' : 'opacity-100'
             }`}

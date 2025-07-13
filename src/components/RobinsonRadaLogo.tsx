@@ -8,7 +8,7 @@ interface RobinsonRadaLogoProps {
   height?: number;
 }
 
-export function RobinsonRadaLogo({ className = '', width = 280, height = 80 }: RobinsonRadaLogoProps) {
+export function RobinsonRadaLogo({ className = '', width = 360, height = 70 }: RobinsonRadaLogoProps) {
   const [isHovered, setIsHovered] = useState(false);
 
   return (
@@ -20,108 +20,88 @@ export function RobinsonRadaLogo({ className = '', width = 280, height = 80 }: R
       <svg
         width={width}
         height={height}
-        viewBox="0 0 280 80"
+        viewBox="0 0 360 70"
         xmlns="http://www.w3.org/2000/svg"
         className="cursor-pointer"
       >
-        {/* Gradiente de fondo */}
+        {/* Gradientes actualizados para texto blanco */}
         <defs>
           <linearGradient id="textGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#1e40af" />
-            <stop offset="50%" stopColor="#3b82f6" />
-            <stop offset="100%" stopColor="#60a5fa" />
+            <stop offset="0%" stopColor="#ffffff" />
+            <stop offset="50%" stopColor="#f8fafc" />
+            <stop offset="100%" stopColor="#e2e8f0" />
           </linearGradient>
           
           <linearGradient id="shadowGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#1e3a8a" stopOpacity="0.3" />
-            <stop offset="100%" stopColor="#1e40af" stopOpacity="0.1" />
+            <stop offset="0%" stopColor="#1e3a8a" stopOpacity="0.2" />
+            <stop offset="100%" stopColor="#1e40af" stopOpacity="0.05" />
           </linearGradient>
 
-          {/* Filtro de sombra */}
+          {/* Filtro de sombra para texto blanco */}
           <filter id="dropShadow" x="-20%" y="-20%" width="140%" height="140%">
-            <feDropShadow dx="2" dy="2" stdDeviation="3" floodColor="#1e40af" floodOpacity="0.3"/>
+            <feDropShadow dx="1" dy="1" stdDeviation="2" floodColor="#000000" floodOpacity="0.3"/>
           </filter>
         </defs>
 
-        {/* Fondo decorativo */}
+        {/* Fondo decorativo más sutil */}
         <rect
           x="0"
           y="0"
-          width="280"
-          height="80"
-          rx="12"
+          width="360"
+          height="70"
+          rx="8"
           fill="url(#shadowGradient)"
-          opacity={isHovered ? "0.1" : "0.05"}
+          opacity={isHovered ? "0.08" : "0.03"}
           className="transition-opacity duration-300"
         />
 
         {/* Línea decorativa superior */}
         <rect
-          x="10"
+          x="15"
           y="8"
-          width="260"
-          height="2"
-          rx="1"
+          width="330"
+          height="1"
+          rx="0.5"
           fill="url(#textGradient)"
-          opacity="0.6"
+          opacity="0.4"
         >
           <animate
             attributeName="width"
-            values="0;260;260"
+            values="0;330;330"
             dur="2s"
             begin="0s"
             fill="freeze"
           />
         </rect>
 
-        {/* Texto principal "ROBINSON" */}
+        {/* Texto completo en una sola línea "ROBINSON RADA GONZÁLEZ" */}
         <text
           x="20"
-          y="32"
+          y="42"
           fontFamily="'Inter', 'Arial', sans-serif"
-          fontSize="18"
+          fontSize="24"
           fontWeight="700"
           fill="url(#textGradient)"
           filter="url(#dropShadow)"
+          letterSpacing="1px"
         >
-          <tspan>ROBINSON</tspan>
+          <tspan>ROBINSON RADA GONZÁLEZ</tspan>
           <animate
             attributeName="opacity"
             values="0;1"
-            dur="1s"
+            dur="1.5s"
             begin="0.5s"
-            fill="freeze"
-          />
-        </text>
-
-        {/* Texto "RADA GONZÁLEZ" */}
-        <text
-          x="20"
-          y="52"
-          fontFamily="'Inter', 'Arial', sans-serif"
-          fontSize="16"
-          fontWeight="600"
-          fill="url(#textGradient)"
-          opacity="0.9"
-          filter="url(#dropShadow)"
-        >
-          <tspan>RADA GONZÁLEZ</tspan>
-          <animate
-            attributeName="opacity"
-            values="0;0.9"
-            dur="1s"
-            begin="1s"
             fill="freeze"
           />
         </text>
 
         {/* Elemento decorativo - círculo animado */}
         <circle
-          cx="240"
-          cy="25"
+          cx="320"
+          cy="35"
           r="3"
-          fill="#3b82f6"
-          opacity="0.7"
+          fill="#ffffff"
+          opacity="0.6"
         >
           <animate
             attributeName="r"
@@ -132,27 +112,27 @@ export function RobinsonRadaLogo({ className = '', width = 280, height = 80 }: R
           />
           <animate
             attributeName="opacity"
-            values="0.4;0.8;0.4"
+            values="0.3;0.7;0.3"
             dur="2s"
             repeatCount="indefinite"
             begin="1.5s"
           />
         </circle>
 
-        {/* Elemento decorativo - líneas animadas */}
-        <g opacity={isHovered ? "0.8" : "0.4"} className="transition-opacity duration-300">
+        {/* Elemento decorativo - líneas animadas (más sutiles) */}
+        <g opacity={isHovered ? "0.6" : "0.3"} className="transition-opacity duration-300">
           <line
-            x1="200"
-            y1="35"
-            x2="220"
-            y2="35"
-            stroke="#60a5fa"
+            x1="300"
+            y1="50"
+            x2="320"
+            y2="50"
+            stroke="#ffffff"
             strokeWidth="1"
             strokeLinecap="round"
           >
             <animate
               attributeName="x2"
-              values="200;220;200"
+              values="300;320;300"
               dur="3s"
               repeatCount="indefinite"
               begin="2s"
@@ -160,18 +140,18 @@ export function RobinsonRadaLogo({ className = '', width = 280, height = 80 }: R
           </line>
           
           <line
-            x1="200"
-            y1="40"
-            x2="215"
-            y2="40"
-            stroke="#60a5fa"
+            x1="305"
+            y1="54"
+            x2="315"
+            y2="54"
+            stroke="#ffffff"
             strokeWidth="1"
             strokeLinecap="round"
-            opacity="0.6"
+            opacity="0.4"
           >
             <animate
               attributeName="x2"
-              values="200;215;200"
+              values="305;315;305"
               dur="3s"
               repeatCount="indefinite"
               begin="2.5s"
@@ -181,17 +161,17 @@ export function RobinsonRadaLogo({ className = '', width = 280, height = 80 }: R
 
         {/* Línea decorativa inferior */}
         <rect
-          x="10"
-          y="70"
-          width="260"
-          height="2"
-          rx="1"
+          x="15"
+          y="60"
+          width="330"
+          height="1"
+          rx="0.5"
           fill="url(#textGradient)"
-          opacity="0.4"
+          opacity="0.3"
         >
           <animate
             attributeName="width"
-            values="0;260;260"
+            values="0;330;330"
             dur="2s"
             begin="0.3s"
             fill="freeze"
@@ -203,13 +183,13 @@ export function RobinsonRadaLogo({ className = '', width = 280, height = 80 }: R
           <rect
             x="0"
             y="0"
-            width="280"
-            height="80"
-            rx="12"
+            width="360"
+            height="70"
+            rx="8"
             fill="none"
             stroke="url(#textGradient)"
             strokeWidth="1"
-            opacity="0.5"
+            opacity="0.4"
             className="animate-pulse"
           />
         )}
