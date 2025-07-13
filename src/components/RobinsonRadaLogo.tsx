@@ -13,16 +13,19 @@ export function RobinsonRadaLogo({ className = '', width = 360, height = 70 }: R
 
   return (
     <div 
-      className={`inline-block ${className}`}
+      className={`inline-block w-full max-w-full ${className}`}
+      style={{ minWidth: 0 }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
       <svg
-        width={width}
+        width="100%"
         height={height}
         viewBox="0 0 360 70"
+        preserveAspectRatio="xMinYMid meet"
         xmlns="http://www.w3.org/2000/svg"
-        className="cursor-pointer"
+        className="cursor-pointer block w-full h-auto"
+        style={{ display: 'block', width: '100%', height: 'auto', minWidth: 0 }}
       >
         {/* Gradientes actualizados para texto blanco */}
         <defs>
@@ -84,8 +87,11 @@ export function RobinsonRadaLogo({ className = '', width = 360, height = 70 }: R
           fill="url(#textGradient)"
           filter="url(#dropShadow)"
           letterSpacing="1px"
+          textLength="320"
+          lengthAdjust="spacingAndGlyphs"
+          style={{ minWidth: 0 }}
         >
-          <tspan>ROBINSON RADA GONZÁLEZ</tspan>
+          ROBINSON RADA GONZÁLEZ
           <animate
             attributeName="opacity"
             values="0;1"
