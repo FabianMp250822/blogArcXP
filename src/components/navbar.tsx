@@ -23,10 +23,11 @@ import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale'; // Import Spanish locale
 import { SearchDrawer } from './SearchDrawer';
+import { useDynamicBranding } from '@/hooks/use-dynamic-branding';
 
 // 3. Define las props que el componente espera recibir
 interface NavbarProps {
-  siteSettings: SiteSettings;
+  siteSettings: any; // Usando any temporalmente para evitar conflictos de tipos
 }
 
 // 4. Actualiza la firma de la función para aceptar las props
@@ -35,7 +36,7 @@ export default function Navbar({ siteSettings }: NavbarProps) {
   const router = useRouter();
   const [currentTime, setCurrentTime] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [currentDomain, setCurrentDomain] = useState<string>('');
+  const branding = useDynamicBranding(siteSettings);
 
   useEffect(() => {
     const updateClock = () => {
@@ -46,37 +47,6 @@ export default function Navbar({ siteSettings }: NavbarProps) {
 
     return () => clearInterval(timerId); // Cleanup interval on component unmount
   }, []);
-
-  useEffect(() => {
-    // Detectar el dominio actual
-    if (typeof window !== 'undefined') {
-      setCurrentDomain(window.location.hostname);
-    }
-  }, []);
-
-  // Función para determinar qué logo usar basado en el dominio
-  const getLogoConfig = () => {
-    const isRobinsonDomain = currentDomain === 'robinsonradagonzalez.com' || 
-                            currentDomain === 'robinsonrada.com' ||
-                            currentDomain === 'www.robinsonradagonzalez.com' ||
-                            currentDomain === 'www.robinsonrada.com';
-    
-    if (isRobinsonDomain) {
-      return {
-        src: 'https://firebasestorage.googleapis.com/v0/b/diamundia.appspot.com/o/articles%2Flogorada.png?alt=media&token=afc52fab-f7f3-44cf-b142-41d33bef8afb',
-        alt: 'Logo de Robinson Rada González',
-        siteName: 'Robinson Rada González'
-      };
-    }
-    
-    return {
-      src: siteSettings.logoUrl,
-      alt: `Logo de ${siteSettings.siteName}`,
-      siteName: siteSettings.siteName
-    };
-  };
-
-  const logoConfig = getLogoConfig();
 
   const handleSignOut = async () => {
     await signOutUser();
@@ -171,6 +141,25 @@ export default function Navbar({ siteSettings }: NavbarProps) {
             >
               <Search className="h-4 w-4" />
             </Button>
+            
+            {/* Botón temporal para pruebas de branding */}
+            {process.env.NODE_ENV === 'development' && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-auto w-auto p-1 text-primary-foreground hover:bg-primary/80 hover:text-primary-foreground text-xs"
+                onClick={() => {
+                  const event = new CustomEvent('toggleBranding', { 
+                    detail: { isRobinson: !branding.siteName.includes('Robinson') } 
+                  });
+                  window.dispatchEvent(event);
+                }}
+                title="Alternar branding (solo desarrollo)"
+              >
+                {branding.siteName.includes('Robinson') ? 'S' : 'R'}
+              </Button>
+            )}
+            
             <SearchDrawer open={searchOpen} onClose={() => setSearchOpen(false)} />
           </div>
         </div>
@@ -188,11 +177,11 @@ export default function Navbar({ siteSettings }: NavbarProps) {
 
           {/* Center: Logo */}
           <div className="flex-1 flex justify-center">
-            {/* 5. Logo dinámico basado en el dominio */}
-            <Link href="/" className="flex items-center space-x-3" aria-label={`Inicio de ${logoConfig.siteName}`}>
+            {/* Logo dinámico basado en el dominio */}
+            <Link href="/" className="flex items-center space-x-3" aria-label={`Inicio de ${branding.siteName}`}>
               <Image 
-                src={logoConfig.src} 
-                alt={logoConfig.alt}
+                src={branding.logoUrl} 
+                alt={`Logo de ${branding.siteName}`}
                 width={156} // 120 * 1.3 = 156
                 height={52} // 40 * 1.3 = 52
                 className="h-10 md:h-[52px] w-auto" // h-8*1.3 ≈ h-10, md:h-10*1.3 ≈ md:h-[52px]

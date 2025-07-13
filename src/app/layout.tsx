@@ -4,6 +4,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { AuthProvider } from '@/components/auth-provider';
 import Navbar from '@/components/navbar';
 import Footer from '@/components/footer';
+import { DynamicMetadata } from '@/components/DynamicMetadata';
 import { getSiteSettings } from '@/lib/firebase/firestore';
 import { Inter, Roboto, Lato } from 'next/font/google'; // 1. Importa las fuentes
 import { hexToHsl } from '@/lib/utils'; // 2. Importa la utilidad
@@ -45,7 +46,7 @@ export default async function RootLayout({
   const siteSettings = await getSiteSettings();
 
   // 4. Selecciona la fuente basada en la configuración
-  const activeFont = fontMap[siteSettings.fontFamily || 'inter'];
+  const activeFont = fontMap[siteSettings.fontFamily as keyof typeof fontMap || 'inter'];
 
   // 5. Genera las variables de color CSS
   const themeStyles = {
@@ -58,11 +59,12 @@ export default async function RootLayout({
     <html lang="en" style={themeStyles} suppressHydrationWarning>
       <body className={`${activeFont.variable} font-sans antialiased flex flex-col min-h-screen`}>
         <AuthProvider>
+          <DynamicMetadata siteSettings={siteSettings} />
           <Navbar siteSettings={siteSettings} />
           <main className="flex-grow container mx-auto px-4 py-8">
             {children}
           </main>
-          <Footer />
+          <Footer siteSettings={siteSettings} />
           <Toaster />
         </AuthProvider>
       </body>
