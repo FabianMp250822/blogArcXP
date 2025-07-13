@@ -1,14 +1,17 @@
 'use client';
 
+'use client';
+
 import { useEffect } from 'react';
-import { useDynamicBranding } from '@/hooks/use-dynamic-branding';
+import { useBranding } from './DynamicBrandingProvider';
 
 interface DynamicMetadataProps {
   siteSettings: any; // Usando any temporalmente para evitar conflictos de tipos
+  hostname: string;
 }
 
-export function DynamicMetadata({ siteSettings }: DynamicMetadataProps) {
-  const branding = useDynamicBranding(siteSettings);
+export function DynamicMetadata({ siteSettings, hostname }: DynamicMetadataProps) {
+  const branding = useBranding();
 
   useEffect(() => {
     // Actualizar el título de la página

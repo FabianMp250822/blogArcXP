@@ -5,9 +5,12 @@ import { AuthProvider } from '@/components/auth-provider';
 import Navbar from '@/components/navbar';
 import Footer from '@/components/footer';
 import { DynamicMetadata } from '@/components/DynamicMetadata';
+import { DynamicBrandingProvider } from '@/components/DynamicBrandingProvider';
 import { getSiteSettings } from '@/lib/firebase/firestore';
+import { getDynamicBranding } from '@/lib/dynamic-branding';
 import { Inter, Roboto, Lato } from 'next/font/google'; // 1. Importa las fuentes
 import { hexToHsl } from '@/lib/utils'; // 2. Importa la utilidad
+import { headers } from 'next/headers'; // Importar headers de Next.js
 
 // 3. Configura las fuentes que ofrecerás
 const fontInter = Inter({ subsets: ['latin'], variable: '--font-sans' });
@@ -44,6 +47,9 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const siteSettings = await getSiteSettings();
+  const headersList = await headers();
+  const hostname = headersList.get('host') || '';
+  const initialBranding = getDynamicBranding(siteSettings, hostname);
 
   // 4. Selecciona la fuente basada en la configuración
   const activeFont = fontMap[siteSettings.fontFamily as keyof typeof fontMap || 'inter'];
@@ -56,16 +62,18 @@ export default async function RootLayout({
 
   return (
     // 6. Aplica la fuente y los estilos
-    <html lang="en" style={themeStyles} suppressHydrationWarning>
+    <html lang="es" style={themeStyles} suppressHydrationWarning>
       <body className={`${activeFont.variable} font-sans antialiased flex flex-col min-h-screen`}>
         <AuthProvider>
-          <DynamicMetadata siteSettings={siteSettings} />
-          <Navbar siteSettings={siteSettings} />
-          <main className="flex-grow container mx-auto px-4 py-8">
-            {children}
-          </main>
-          <Footer siteSettings={siteSettings} />
-          <Toaster />
+          <DynamicBrandingProvider siteSettings={siteSettings} initialBranding={initialBranding}>
+            <DynamicMetadata siteSettings={siteSettings} hostname={hostname} />
+            <Navbar siteSettings={siteSettings} />
+            <main className="flex-grow container mx-auto px-4 py-8">
+              {children}
+            </main>
+            <Footer siteSettings={siteSettings} />
+            <Toaster />
+          </DynamicBrandingProvider>
         </AuthProvider>
       </body>
     </html>

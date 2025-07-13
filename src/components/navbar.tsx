@@ -23,20 +23,19 @@ import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale'; // Import Spanish locale
 import { SearchDrawer } from './SearchDrawer';
-import { useDynamicBranding } from '@/hooks/use-dynamic-branding';
+import { DynamicLogo } from './DynamicLogo';
+import { DynamicTestButton } from './DynamicTestButton';
 
 // 3. Define las props que el componente espera recibir
 interface NavbarProps {
   siteSettings: any; // Usando any temporalmente para evitar conflictos de tipos
 }
-
 // 4. Actualiza la firma de la función para aceptar las props
 export default function Navbar({ siteSettings }: NavbarProps) {
   const { user, userProfile, loading, signOutUser, isAdmin, role } = useAuth();
   const router = useRouter();
   const [currentTime, setCurrentTime] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
-  const branding = useDynamicBranding(siteSettings);
 
   useEffect(() => {
     const updateClock = () => {
@@ -81,6 +80,7 @@ export default function Navbar({ siteSettings }: NavbarProps) {
             <span className="hidden sm:inline">
               Actualizado {currentTime || <Skeleton className="h-3 w-28 inline-block bg-primary-foreground/20" />}
             </span>
+            {/* ...existing auth code... */}
             {loading ? (
               <Skeleton className="h-5 w-5 rounded-full bg-primary-foreground/20" />
             ) : user ? (
@@ -143,22 +143,7 @@ export default function Navbar({ siteSettings }: NavbarProps) {
             </Button>
             
             {/* Botón temporal para pruebas de branding */}
-            {process.env.NODE_ENV === 'development' && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-auto w-auto p-1 text-primary-foreground hover:bg-primary/80 hover:text-primary-foreground text-xs"
-                onClick={() => {
-                  const event = new CustomEvent('toggleBranding', { 
-                    detail: { isRobinson: !branding.siteName.includes('Robinson') } 
-                  });
-                  window.dispatchEvent(event);
-                }}
-                title="Alternar branding (solo desarrollo)"
-              >
-                {branding.siteName.includes('Robinson') ? 'S' : 'R'}
-              </Button>
-            )}
+            <DynamicTestButton />
             
             <SearchDrawer open={searchOpen} onClose={() => setSearchOpen(false)} />
           </div>
@@ -178,20 +163,12 @@ export default function Navbar({ siteSettings }: NavbarProps) {
           {/* Center: Logo */}
           <div className="flex-1 flex justify-center">
             {/* Logo dinámico basado en el dominio */}
-            <Link href="/" className="flex items-center space-x-3" aria-label={`Inicio de ${branding.siteName}`}>
-              <Image 
-                src={branding.logoUrl} 
-                alt={`Logo de ${branding.siteName}`}
-                width={156} // 120 * 1.3 = 156
-                height={52} // 40 * 1.3 = 52
-                className="h-10 md:h-[52px] w-auto" // h-8*1.3 ≈ h-10, md:h-10*1.3 ≈ md:h-[52px]
-                priority
-              />
-            </Link>
+            <DynamicLogo />
           </div>
 
           {/* Right Controls */}
           <div className="flex items-center space-x-1.5 sm:space-x-2 md:space-x-3">
+            {/* ...existing controls... */}
             <Button
               className="bg-primary text-primary-foreground hover:bg-primary/90 text-xs px-2 py-1 md:px-3 md:py-1.5 h-auto rounded-sm whitespace-nowrap"
               asChild

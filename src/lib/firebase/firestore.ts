@@ -432,7 +432,7 @@ export async function getSiteSettings(): Promise<SiteSettings> {
     // Combina los datos guardados con los predeterminados para asegurar que todos los campos existan
     const data = docSnap.data();
     return {
-      siteName: data.siteName || 'WRadio',
+      siteName: data.siteName || 'Surco',
       logoUrl: data.logoUrl || '/default-logo.svg',
       primaryColor: data.primaryColor || '#000000', // Negro por defecto
       secondaryColor: data.secondaryColor || '#f5a623', // Amarillo/Naranja por defecto
@@ -442,7 +442,7 @@ export async function getSiteSettings(): Promise<SiteSettings> {
 
   // Devuelve valores predeterminados si el documento no existe
   return {
-    siteName: 'WRadio',
+    siteName: 'Surco',
     logoUrl: '/default-logo.svg',
     primaryColor: '#000000',
     secondaryColor: '#f5a623',

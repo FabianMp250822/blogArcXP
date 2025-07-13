@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import React from 'react';
-import { useDynamicBranding } from '@/hooks/use-dynamic-branding';
+import { DynamicFooterContent } from './DynamicFooterContent';
 
 interface FooterProps {
   siteSettings: any; // Usando any temporalmente para evitar conflictos de tipos
@@ -17,8 +17,6 @@ const footerLinks = [
 ];
 
 export default function Footer({ siteSettings }: FooterProps) {
-  const branding = useDynamicBranding(siteSettings);
-  const currentYear = new Date().getFullYear();
   return (
     <footer className="text-xs border-t border-border">
       <div className="bg-primary/10 dark:bg-primary/20 text-foreground py-6">
@@ -36,13 +34,7 @@ export default function Footer({ siteSettings }: FooterProps) {
             ))}
           </nav>
 
-          <p className="mb-2">
-            © {currentYear} {branding.companyName}. Todos los derechos reservados.
-          </p>
-
-          <p className="max-w-3xl mx-auto">
-            {branding.companyName} realiza una reserva expresa de las reproducciones y usos de las obras y otras prestaciones accesibles desde este sitio web a medios de lectura mecánica u otros medios que resulten adecuados.
-          </p>
+          <DynamicFooterContent />
         </div>
       </div>
 
