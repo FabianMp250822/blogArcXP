@@ -17,7 +17,7 @@ export function getDynamicBranding(siteSettings: any, hostname?: string): Brandi
     return {
       siteName: 'Robinson Rada González',
       companyName: 'Robinson Rada González',
-      logoUrl: 'https://storage.googleapis.com/diamundia.appspot.com/articles/logorada.png',
+      logoUrl: siteSettings?.logoUrl2 || 'https://firebasestorage.googleapis.com/v0/b/diamundia.appspot.com/o/articles%2Flogorada.png?alt=media&token=afc52fab-f7f3-44cf-b142-41d33bef8afb',
       title: 'Robinson Rada González',
       description: 'Sitio oficial del Dr. Robinson Rada González. Médico, político y líder comunitario comprometido con el desarrollo de la región.'
     };
